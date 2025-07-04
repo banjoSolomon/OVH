@@ -1,0 +1,28 @@
+name: 🚀 Deploy Monitor App to OVH
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Deploy to OVH via Self-Hosted Runner
+    runs-on: [self-hosted, OVH-FE]
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v3
+
+      - name: 🐳 Build Docker image
+        run: |
+          docker stop monitor-app || true
+          docker rm monitor-app || true
+          docker build -t monitor-app .
+
+      - name: 🚀 Run Docker container
+        run: |
+          docker run -d --name monitor-app \
+            -p 5000:5000 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            --restart always \
+            monitor-app

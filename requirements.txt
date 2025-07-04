@@ -1,0 +1,4 @@
+flask
+docker
+psutil
+humanize
