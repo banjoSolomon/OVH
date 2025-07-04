@@ -346,6 +346,5 @@ def get_container_metrics(container_id):
 
 
 if __name__ == "__main__":
-    # Ensure you have the 'templates' folder in the same directory as app.py
-    # and index.html inside the 'templates' folder.
+
     app.run(host="0.0.0.0", port=5000, debug=True)

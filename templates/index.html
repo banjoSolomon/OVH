@@ -387,10 +387,10 @@
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
-            // Set up auto-refresh (every 30 seconds)
+            // Set up auto-refresh (every 1 minute)
             setInterval(() => {
                 location.reload();
-            }, 30000); // 30000 milliseconds = 30 seconds
+            }, 60000); // 60000 milliseconds = 1 minute
 
             // Initial call to display last refreshed time
             updateLastRefreshedTime();
