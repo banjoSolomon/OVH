@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Environment Monitoring</title>
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         /* Custom styles for Inter font and general aesthetics */
         body {
@@ -32,6 +32,9 @@
         }
         .action-button.logs {
             @apply bg-purple-600 hover:bg-purple-700 text-white;
+        }
+        .action-button.details { /* New style for details button */
+            @apply bg-indigo-600 hover:bg-indigo-700 text-white;
         }
         /* Table row styling for status */
         .table-row-running {
@@ -67,7 +70,7 @@
             border-radius: 1.5rem; /* More rounded */
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Stronger shadow */
             width: 90%;
-            max-width: 700px; /* Adjusted max-width */
+            max-width: 850px; /* Adjusted max-width for details */
             max-height: 90vh;
             display: flex;
             flex-direction: column;
@@ -87,7 +90,7 @@
         .modal-body {
             flex-grow: 1;
             overflow-y: auto;
-            background-color: #1a202c; /* Darker background for logs */
+            background-color: #1a202c; /* Darker background for logs/metrics */
             color: #e2e8f0; /* Light text for logs */
             padding: 1.5rem;
             border-radius: 0.75rem;
@@ -137,12 +140,10 @@
             <i class="fas fa-server text-indigo-700 mr-5 animate-pulse"></i>Environment Monitoring
         </h1>
 
-        <!-- Last Refreshed Time -->
         <div class="text-center text-gray-600 text-lg mb-8 font-medium">
             Last Refreshed: <span id="lastRefreshedTime" class="text-gray-800 font-semibold"></span>
         </div>
 
-        <!-- Dashboard Statistics -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
             <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
                 <div>
@@ -167,7 +168,6 @@
             </div>
         </div>
 
-        <!-- Filter, Search and Refresh -->
         <div class="flex flex-col sm:flex-row justify-between items-center mb-10 space-y-5 sm:space-y-0 sm:space-x-6">
             <div class="flex flex-wrap justify-center gap-4 w-full sm:w-auto">
                 <a href="/?filter=running" class="action-button px-6 py-3 rounded-2xl
@@ -193,7 +193,6 @@
             </div>
         </div>
 
-        <!-- Container Table -->
         <div class="overflow-x-auto rounded-2xl shadow-xl border border-gray-200">
             <table class="min-w-full divide-y divide-gray-200" id="containerTable">
                 <thead class="bg-gray-100">
@@ -273,6 +272,9 @@
                                 <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs">
                                     <i class="fas fa-file-alt mr-1"></i>Logs
                                 </button>
+                                <button type="button" onclick="viewMetrics('{{ c.id }}', '{{ c.name }}')" class="action-button details">
+                                    <i class="fas fa-chart-line mr-1"></i>Details
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -281,13 +283,11 @@
             </table>
         </div>
 
-        <!-- Message Box for Alerts (replaces alert()) -->
         <div id="messageBox" class="fixed bottom-8 right-8 bg-blue-600 text-white px-8 py-4 rounded-xl shadow-2xl hidden z-50 transition-all duration-500 transform translate-y-full opacity-0">
             <p id="messageText" class="text-lg font-medium"></p>
             <button onclick="hideMessageBox()" class="absolute top-3 right-4 text-white text-2xl font-bold">&times;</button>
         </div>
 
-        <!-- Confirmation Modal -->
         <div id="confirmationModal" class="modal hidden">
             <div class="modal-content text-gray-800">
                 <div class="modal-header">
@@ -304,7 +304,6 @@
             </div>
         </div>
 
-        <!-- Logs Modal -->
         <div id="logsModal" class="modal hidden">
             <div class="modal-content text-gray-800">
                 <div class="modal-header">
@@ -319,6 +318,21 @@
                 <div id="logsModalBody" class="modal-body flex items-center justify-center">
                     <div class="spinner"></div>
                     <span class="ml-4 text-gray-400 text-lg">Loading logs...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="metricsModal" class="modal hidden">
+            <div class="modal-content text-gray-800">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="metricsModalTitle">Container Details & Metrics</h2>
+                    <span class="close-button" onclick="closeMetricsModal()">&times;</span>
+                </div>
+                <div id="metricsModalBody" class="modal-body text-gray-100">
+                    <div class="flex items-center justify-center py-10">
+                        <div class="spinner"></div>
+                        <span class="ml-4 text-gray-400 text-lg">Loading metrics...</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -383,7 +397,7 @@
             if (message && messageType) {
                 showMessageBox(decodeURIComponent(message), messageType);
                 // Clean up URL parameters to avoid showing message again on refresh
-                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + (urlParams.toString().replace(`message=${message}&type=${messageType}`, '') ? '?' + urlParams.toString().replace(`message=${message}&type=${messageType}`, '') : '');
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + (urlParams.toString().replace(`message=${encodeURIComponent(message)}&type=${messageType}`, '').replace('&&', '&').replace(/\?&$/, '?'));
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
@@ -467,17 +481,19 @@
 
             logsModalTitle.textContent = `Logs for ${containerName}`;
             // Show loading spinner
-            logsModalBody.innerHTML = '<div class="spinner"></div><span class="ml-4 text-gray-400 text-lg">Loading logs...</span>';
-            logsModalBody.classList.add('flex', 'items-center', 'justify-center'); // Center content
+            logsModalBody.innerHTML = '<div class="flex flex-col items-center justify-center py-10"><div class="spinner"></div><span class="ml-4 text-gray-400 text-lg mt-4">Loading logs...</span></div>';
+            logsModalBody.classList.remove('flex-row'); // Ensure no previous flex row from metrics
+            logsModalBody.classList.add('flex-col', 'items-center', 'justify-center'); // Center content
             logsModal.classList.remove('hidden');
 
             try {
                 const response = await fetch(`/container/${containerId}/logs`);
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text(); // Get detailed error
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
                 const data = await response.json();
-                logsModalBody.classList.remove('flex', 'items-center', 'justify-center'); // Remove centering
+                logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Remove centering
                 if (data.logs) {
                     logsModalBody.textContent = data.logs;
                 } else {
@@ -485,7 +501,7 @@
                 }
             } catch (error) {
                 console.error("Failed to fetch logs:", error);
-                logsModalBody.classList.remove('flex', 'items-center', 'justify-center'); // Remove centering
+                logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Remove centering
                 logsModalBody.textContent = `Failed to load logs: ${error.message}`;
                 showMessageBox(`Failed to load logs for ${containerName}.`, 'error');
             }
@@ -499,20 +515,88 @@
         function copyLogsToClipboard() {
             const logsText = document.getElementById('logsModalBody').textContent;
             if (logsText) {
-                // Use document.execCommand for broader compatibility in iframes
-                const textArea = document.createElement("textarea");
-                textArea.value = logsText;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
+                navigator.clipboard.writeText(logsText).then(() => {
                     showMessageBox('Logs copied to clipboard!', 'success');
-                } catch (err) {
+                }).catch(err => {
                     console.error('Failed to copy logs:', err);
-                    showMessageBox('Failed to copy logs. Please copy manually.', 'error');
-                }
-                document.body.removeChild(textArea);
+                    showMessageBox('Failed to copy logs. Please copy manually (browser might restrict access).', 'error');
+                });
             }
+        }
+
+        // --- Metrics/Details Modal Functions (NEW) ---
+        async function viewMetrics(containerId, containerName) {
+            const metricsModal = document.getElementById('metricsModal');
+            const metricsModalTitle = document.getElementById('metricsModalTitle');
+            const metricsModalBody = document.getElementById('metricsModalBody');
+
+            metricsModalTitle.textContent = `Details & Metrics for ${containerName}`;
+            metricsModalBody.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10">
+                    <div class="spinner"></div>
+                    <span class="ml-4 text-gray-400 text-lg mt-4">Loading metrics...</span>
+                </div>
+            `;
+            metricsModal.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/container/${containerId}/metrics`);
+                if (!response.ok) {
+                    const errorText = await response.text(); // Get detailed error
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+                const data = await response.json();
+
+                // Build the content for the metrics modal body
+                let contentHtml = `
+                    <p class="text-xl font-bold text-gray-50 mb-4">Last Updated: ${data.timestamp || 'N/A'}</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                            <h3 class="text-lg font-semibold text-gray-200 mb-3"><i class="fas fa-microchip mr-2 text-blue-400"></i>CPU Usage</h3>
+                            <p class="text-3xl font-bold text-green-400">${data.cpu_usage || 'N/A'}</p>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                            <h3 class="text-lg font-semibold text-gray-200 mb-3"><i class="fas fa-memory mr-2 text-purple-400"></i>Memory Usage</h3>
+                            <p class="text-3xl font-bold text-yellow-400">${data.memory_usage || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <h3 class="text-lg font-semibold text-gray-50 mb-3"><i class="fas fa-network-wired mr-2 text-orange-400"></i>Network I/O</h3>
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
+                        ${Object.keys(data.network_io).length > 0 ? Object.entries(data.network_io).map(([net_name, net_data]) => `
+                            <div class="mb-2 last:mb-0">
+                                <p class="text-gray-300 font-medium">${net_name}:</p>
+                                <p class="ml-4 text-gray-200">Received: <span class="text-cyan-300">${net_data.rx_bytes || 'N/A'}</span></p>
+                                <p class="ml-4 text-gray-200">Transmitted: <span class="text-fuchsia-300">${net_data.tx_bytes || 'N/A'}</span></p>
+                            </div>
+                        `).join('') : '<p class="text-gray-400">No network data available.</p>'}
+                    </div>
+
+                    <h3 class="text-lg font-semibold text-gray-50 mb-3"><i class="fas fa-hdd mr-2 text-red-400"></i>Block I/O (Disk)</h3>
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+                        <p class="text-gray-200">Read: <span class="text-lime-300">${data.block_io.read_bytes || 'N/A'}</span></p>
+                        <p class="text-gray-200">Write: <span class="text-rose-300">${data.block_io.write_bytes || 'N/A'}</span></p>
+                    </div>
+                `;
+
+                metricsModalBody.innerHTML = contentHtml;
+                metricsModalBody.classList.remove('flex', 'items-center', 'justify-center', 'flex-col'); // Remove centering for actual content
+
+            } catch (error) {
+                console.error("Failed to fetch metrics:", error);
+                metricsModalBody.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
+                        <span class="text-red-400 text-lg text-center">Failed to load metrics: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
+                    </div>
+                `;
+                showMessageBox(`Failed to load metrics for ${containerName}.`, 'error');
+            }
+        }
+
+        function closeMetricsModal() {
+            document.getElementById('metricsModal').classList.add('hidden');
+            document.getElementById('metricsModalBody').innerHTML = ''; // Clear content
         }
     </script>
 </body>
