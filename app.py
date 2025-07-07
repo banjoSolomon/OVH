@@ -275,12 +275,27 @@ def get_container_metrics(container_id):
         container = client.containers.get(container_id)
         print(f"Found container '{container.name}' ({container.id}). Attempting to fetch stats...")
 
+        # --- Extract basic container info here ---
+        # Uptime will be the 'StartedAt' timestamp; calculate human-readable in JS
+        container_info = {
+            'id': container.short_id,  # Use short ID for display
+            'name': container.name,
+            'image': container.image.tags[0] if container.image.tags else 'untagged',
+            'status': container.status,
+            'uptime': container.attrs['State']['StartedAt'] # ISO format string
+        }
+        # ----------------------------------------
+
         stats_data = container.stats(stream=False)  # stream=False gets current stats immediately
 
         if not stats_data:
             print(
                 f"No stats data available for container '{container.name}' ({container_id}). It might be too new or not generating stats yet.")
-            return jsonify({"error": f"No metrics data available for container '{container.name}'."}), 500
+            # Still return container info even if no stats data
+            return jsonify({
+                "error": f"No metrics data available for container '{container.name}'.",
+                **container_info  # Include basic info
+            }), 500
 
         print(f"Successfully received raw stats data for '{container.name}'.")
 
@@ -317,7 +332,7 @@ def get_container_metrics(container_id):
             print(f"Error processing block I/O metrics for '{container_id}': {e}")
             block_io_metrics = {'error': f'Failed to process block I/O data: {e}'}
 
-        cpu_usage = 'N/A'
+        cpu_percentage_value = 'N/A'
         try:
             # CPU usage calculation based on Docker's formula:
             # ((cpu_delta / system_cpu_delta) * number_of_cpus) * 100.0
@@ -336,34 +351,40 @@ def get_container_metrics(container_id):
 
                 if system_cpu_delta > 0 and cpu_delta > 0 and online_cpus > 0:
                     cpu_percent = (cpu_delta / system_cpu_delta) * online_cpus * 100.0
-                    cpu_usage = f"{round(cpu_percent, 2)}%"
+                    cpu_percentage_value = f"{round(cpu_percent, 2)}" # As a string for frontend
                 else:
-                    cpu_usage = "0.00%"
+                    cpu_percentage_value = "0.00"
             print(f"CPU metrics processed for '{container.name}'.")
         except Exception as e:
             print(f"Error processing CPU metrics for '{container_id}': {e}")
-            cpu_usage = f'Failed to process CPU data: {e}'
+            cpu_percentage_value = f'Failed to process CPU data: {e}'
 
-        memory_usage = 'N/A'
+        memory_usage_str = 'N/A'
+        memory_limit_str = 'N/A'
         try:
             memory_stats = stats_data.get('memory_stats', {})
             if 'usage' in memory_stats and 'limit' in memory_stats:
                 mem_usage = memory_stats['usage']
                 mem_limit = memory_stats['limit']
                 if mem_limit > 0:
-                    memory_usage = f"{format_size(mem_usage)} / {format_size(mem_limit)} ({round((mem_usage / mem_limit) * 100, 2)}%)"
+                    memory_usage_str = f"{format_size(mem_usage)} / {format_size(mem_limit)} ({round((mem_usage / mem_limit) * 100, 2)}%)"
+                    memory_limit_str = format_size(mem_limit)
                 else:
-                    memory_usage = f"{format_size(mem_usage)} / Unlimited"
+                    memory_usage_str = f"{format_size(mem_usage)} / Unlimited"
+                    memory_limit_str = "Unlimited"
             print(f"Memory metrics processed for '{container.name}'.")
         except Exception as e:
             print(f"Error processing memory metrics for '{container_id}': {e}")
-            memory_usage = f'Failed to process Memory data: {e}'
+            memory_usage_str = f'Failed to process Memory data: {e}'
+            memory_limit_str = 'N/A'
 
         metrics_data = {
+            **container_info, # Includes ID, Name, Image, Status, Uptime
             'network_io': network_metrics,
-            'block_io': block_io_metrics,
-            'cpu_usage': cpu_usage,
-            'memory_usage': memory_usage,
+            'disk_io': block_io_metrics, # Renamed key to match frontend expectation
+            'cpu_percentage': cpu_percentage_value,
+            'memory_usage': memory_usage_str,
+            'memory_limit': memory_limit_str, # Explicitly include memory_limit
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         print(f"Successfully fetched and processed metrics for '{container.name}'.")
