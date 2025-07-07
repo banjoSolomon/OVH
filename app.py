@@ -1,17 +1,13 @@
-# app.py
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
 import docker
 from docker.errors import NotFound, APIError
 from datetime import datetime
 import humanize  # pip install humanize
 
-# import time # Not directly used for time formatting, datetime is used
-
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Required for flash messages
 
 # Initialize Docker client globally
-# This assumes the Flask app has access to the Docker daemon socket.
 try:
     client = docker.from_env()
     # Test connection to ensure Docker daemon is reachable
@@ -38,11 +34,12 @@ def get_container_details(container):
         'short_id': container.short_id,
         'name': container.name,
         'image_tag': container.image.tags[0] if container.image.tags else 'untagged',
-        'status': container.status,
-        'command': container.attrs['Config']['Cmd'] if container.attrs['Config']['Cmd'] else 'N/A',
+        'status': container.status,  # Directly use container.status for flexibility
+        'command': ' '.join(container.attrs['Config']['Cmd']) if container.attrs['Config']['Cmd'] else 'N/A',
+        # Join command list to string
         'ports': 'N/A',
         'created_at': 'N/A',
-        'size': 'N/A'  # Size info might not be readily available without specific API calls or list(size=True)
+        'size': 'N/A'
     }
 
     # Extract ports
@@ -64,7 +61,10 @@ def get_container_details(container):
     if container.attrs and 'Created' in container.attrs:
         try:
             created_iso = container.attrs['Created']
-            # Remove nanoseconds and 'Z' for simpler parsing
+            # Python's datetime.fromisoformat can handle 'Z' with tzinfo.
+            # However, if we want a simple local datetime string, it's often easier to strip 'Z' and just parse.
+            # Or, better, handle timezone-aware parsing. For simplicity here, we'll keep the previous approach
+            # of stripping Z and letting fromisoformat handle the offset correctly if present.
             created_dt = datetime.fromisoformat(created_iso.replace('Z', '+00:00'))
             details['created_at'] = created_dt.strftime('%Y-%m-%d %H:%M:%S')
         except ValueError:
@@ -73,13 +73,16 @@ def get_container_details(container):
     # Size: Note that 'SizeRw' and 'SizeRootFs' are often only populated when
     # containers.list(size=True) or container.inspect() is called.
     # For a general list view, it's common for this to be 'N/A' unless explicit API calls are made.
+    # To get size, we would ideally need `container.reload()` or fetch with `client.containers.list(all=True, size=True)`
+    # which can impact performance for large numbers of containers.
+    # For the scope of this UI, if these aren't consistently populated, 'N/A' is an acceptable fallback.
     if 'SizeRw' in container.attrs and 'SizeRootFs' in container.attrs:
         total_size = container.attrs['SizeRw'] + container.attrs['SizeRootFs']
         details['size'] = format_size(total_size)
-    elif 'SizeRw' in container.attrs:  # Fallback for just SizeRw
+    elif 'SizeRw' in container.attrs:
         details['size'] = format_size(container.attrs['SizeRw'])
     else:
-        details['size'] = 'N/A'
+        details['size'] = 'N/A'  # Default to N/A if size info isn't directly in `container.attrs`
 
     return details
 
@@ -87,24 +90,24 @@ def get_container_details(container):
 def get_container_stats():
     """Gets counts of running, exited, and total containers."""
     if not DOCKER_CLIENT_READY:
-        return 0, 0, 0  # Return zeros if Docker client is not ready
+        return 0, 0, 0
 
     try:
-        # Fetch all containers once
         all_containers = client.containers.list(all=True)
 
-        # Filter based on exact status strings from the single all_containers list
         running_count = len([c for c in all_containers if c.status == 'running'])
         exited_count = len([c for c in all_containers if c.status == 'exited'])
-        total_count = len(all_containers)  # Total count is simply the length of all_containers
+        total_count = len(all_containers)
 
         print(f"Dashboard Stats: Running={running_count}, Exited={exited_count}, Total={total_count}")
         return running_count, exited_count, total_count
     except APIError as e:
         print(f"Docker API error in get_container_stats: {e}")
+        flash(f"Error fetching dashboard statistics: {e}", "error")  # Flash error
         return 0, 0, 0
     except Exception as e:
         print(f"An unexpected error occurred in get_container_stats: {e}")
+        flash(f"An unexpected error occurred while fetching dashboard statistics: {e}", "error")  # Flash error
         return 0, 0, 0
 
 
@@ -127,28 +130,33 @@ def index():
             total_count=0
         )
 
-    filter_type = request.args.get("filter", "running")
+    filter_type = request.args.get("filter", "all")  # Default to 'all' for a broader initial view
     container_list = []
-    # error_message = None # No longer needed, using flash messages
 
     try:
+        # Docker SDK's filters parameter expects a dictionary of lists for statuses
         if filter_type == "running":
-            # Use exact status string for filtering directly via Docker SDK filters
-            raw_containers = client.containers.list(filters={'status': 'running'})
+            raw_containers = client.containers.list(filters={'status': ['running']})
         elif filter_type == "exited":
-            # Use exact status string for filtering
-            raw_containers = client.containers.list(filters={'status': 'exited'})
-        else:  # "all"
+            raw_containers = client.containers.list(filters={'status': ['exited']})
+        elif filter_type == "all":
             raw_containers = client.containers.list(all=True)
+        # Add other filters if you implement them (e.g., 'paused', 'restarting')
+        # elif filter_type == "paused":
+        #     raw_containers = client.containers.list(filters={'status': ['paused']})
+        else:  # Fallback for invalid filter type
+            flash(f"Invalid filter type '{filter_type}'. Displaying all containers.", "warning")
+            raw_containers = client.containers.list(all=True)
+            filter_type = "all"
 
         for c in raw_containers:
             container_list.append(get_container_details(c))
 
     except APIError as e:
-        flash(f"Docker API Error: {e}", "error")
+        flash(f"Docker API Error fetching containers: {e}", "error")
         print(f"Docker API Error: {e}")
     except Exception as e:
-        flash(f"An unexpected error occurred: {e}", "error")
+        flash(f"An unexpected error occurred while listing containers: {e}", "error")
         print(f"An unexpected error occurred: {e}")
 
     running_count, exited_count, total_count = get_container_stats()
@@ -160,14 +168,13 @@ def index():
         running_count=running_count,
         exited_count=exited_count,
         total_count=total_count
-        # error_message=error_message # No longer passed directly
     )
 
 
 @app.route("/container/<container_id>/start", methods=["POST"])
 def start_container(container_id):
     if not DOCKER_CLIENT_READY:
-        return flash_message_and_redirect("Docker client not ready.", "error")
+        return flash_message_and_redirect("Docker client not ready. Cannot start container.", "error")
     try:
         container = client.containers.get(container_id)
         container.start()
@@ -175,7 +182,7 @@ def start_container(container_id):
     except NotFound:
         return flash_message_and_redirect(f"Container with ID '{container_id}' not found.", "error")
     except APIError as e:
-        return flash_message_and_redirect(f"Error starting container: {e}", "error")
+        return flash_message_and_redirect(f"Error starting container '{container_id}': {e}", "error")
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
@@ -183,15 +190,15 @@ def start_container(container_id):
 @app.route("/container/<container_id>/stop", methods=["POST"])
 def stop_container(container_id):
     if not DOCKER_CLIENT_READY:
-        return flash_message_and_redirect("Docker client not ready.", "error")
+        return flash_message_and_redirect("Docker client not ready. Cannot stop container.", "error")
     try:
         container = client.containers.get(container_id)
-        container.stop()
+        container.stop(timeout=5)  # Add a timeout for graceful shutdown
         return flash_message_and_redirect(f"Container '{container.name}' stopped successfully.", "success")
     except NotFound:
         return flash_message_and_redirect(f"Container with ID '{container_id}' not found.", "error")
     except APIError as e:
-        return flash_message_and_redirect(f"Error stopping container: {e}", "error")
+        return flash_message_and_redirect(f"Error stopping container '{container_id}': {e}", "error")
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
@@ -199,15 +206,15 @@ def stop_container(container_id):
 @app.route("/container/<container_id>/restart", methods=["POST"])
 def restart_container(container_id):
     if not DOCKER_CLIENT_READY:
-        return flash_message_and_redirect("Docker client not ready.", "error")
+        return flash_message_and_redirect("Docker client not ready. Cannot restart container.", "error")
     try:
         container = client.containers.get(container_id)
-        container.restart()
+        container.restart(timeout=10)  # Add a timeout for restart
         return flash_message_and_redirect(f"Container '{container.name}' restarted successfully.", "success")
     except NotFound:
         return flash_message_and_redirect(f"Container with ID '{container_id}' not found.", "error")
     except APIError as e:
-        return flash_message_and_redirect(f"Error restarting container: {e}", "error")
+        return flash_message_and_redirect(f"Error restarting container '{container_id}': {e}", "error")
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
@@ -215,20 +222,21 @@ def restart_container(container_id):
 @app.route("/container/<container_id>/remove", methods=["POST"])
 def remove_container(container_id):
     if not DOCKER_CLIENT_READY:
-        return flash_message_and_redirect("Docker client not ready.", "error")
+        return flash_message_and_redirect("Docker client not ready. Cannot remove container.", "error")
     try:
         container = client.containers.get(container_id)
-        # Only allow removal if exited
-        if container.status == 'exited':  # Use exact status string
+        # Only allow removal if exited, or if force is true (not implemented in UI for now)
+        if container.status == 'exited':
             container.remove()
             return flash_message_and_redirect(f"Container '{container.name}' removed successfully.", "success")
         else:
-            return flash_message_and_redirect(f"Container '{container.name}' is not exited. Please stop it first.",
-                                              "warning")
+            flash_message_and_redirect(
+                f"Container '{container.name}' is currently '{container.status}'. Please stop it first before removing.",
+                "warning")
     except NotFound:
         return flash_message_and_redirect(f"Container with ID '{container_id}' not found.", "error")
     except APIError as e:
-        return flash_message_and_redirect(f"Error removing container: {e}", "error")
+        return flash_message_and_redirect(f"Error removing container '{container_id}': {e}", "error")
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
@@ -267,24 +275,22 @@ def get_container_metrics(container_id):
         container = client.containers.get(container_id)
         print(f"Found container '{container.name}' ({container.id}). Attempting to fetch stats...")
 
-        # FIX: Directly assign stats_data as container.stats(stream=False) returns a dictionary
-        stats_data = container.stats(stream=False)
+        stats_data = container.stats(stream=False)  # stream=False gets current stats immediately
 
-        if not stats_data:  # Check if the dictionary is empty, which could happen if no stats are available
+        if not stats_data:
             print(
                 f"No stats data available for container '{container.name}' ({container_id}). It might be too new or not generating stats yet.")
             return jsonify({"error": f"No metrics data available for container '{container.name}'."}), 500
 
         print(f"Successfully received raw stats data for '{container.name}'.")
-        # print(f"Raw stats data: {stats_data}") # Uncomment for very verbose debugging
 
         network_metrics = {}
         try:
             if 'networks' in stats_data:
                 for net_name, net_data in stats_data['networks'].items():
                     network_metrics[net_name] = {
-                        'rx_bytes': format_size(net_data.get('rx_bytes')),
-                        'tx_bytes': format_size(net_data.get('tx_bytes'))
+                        'rx_bytes': format_size(net_data.get('rx_bytes', 0)),  # Default to 0 for missing keys
+                        'tx_bytes': format_size(net_data.get('tx_bytes', 0))
                     }
             print(f"Network metrics processed for '{container.name}'.")
         except Exception as e:
@@ -297,11 +303,15 @@ def get_container_metrics(container_id):
         }
         try:
             if 'blkio_stats' in stats_data and 'io_service_bytes_recursive' in stats_data['blkio_stats']:
+                read_bytes_total = 0
+                write_bytes_total = 0
                 for entry in stats_data['blkio_stats']['io_service_bytes_recursive']:
                     if entry['op'] == 'Read':
-                        block_io_metrics['read_bytes'] = format_size(entry['value'])
+                        read_bytes_total += entry['value']
                     elif entry['op'] == 'Write':
-                        block_io_metrics['write_bytes'] = format_size(entry['value'])
+                        write_bytes_total += entry['value']
+                block_io_metrics['read_bytes'] = format_size(read_bytes_total)
+                block_io_metrics['write_bytes'] = format_size(write_bytes_total)
             print(f"Block I/O metrics processed for '{container.name}'.")
         except Exception as e:
             print(f"Error processing block I/O metrics for '{container_id}': {e}")
@@ -311,17 +321,22 @@ def get_container_metrics(container_id):
         try:
             # CPU usage calculation based on Docker's formula:
             # ((cpu_delta / system_cpu_delta) * number_of_cpus) * 100.0
-            if 'cpu_stats' in stats_data and 'precpu_stats' in stats_data:
-                cpu_delta = stats_data['cpu_stats']['cpu_usage']['total_usage'] - \
-                            stats_data['precpu_stats']['cpu_usage']['total_usage']
-                system_cpu_delta = stats_data['cpu_stats']['system_cpu_usage'] - \
-                                   stats_data['precpu_stats']['system_cpu_usage']
-                online_cpus = stats_data['cpu_stats'].get('online_cpus', len(
-                    stats_data['cpu_stats']['cpu_usage']['percpu_usage']) if 'percpu_usage' in stats_data['cpu_stats'][
-                    'cpu_usage'] else 1)  # Fallback to 1 or number of percpu_usage if online_cpus is missing
+            cpu_stats = stats_data.get('cpu_stats', {})
+            precpu_stats = stats_data.get('precpu_stats', {})
 
-                if system_cpu_delta > 0 and cpu_delta > 0:
-                    cpu_usage = f"{round((cpu_delta / system_cpu_delta) * online_cpus * 100.0, 2)}%"
+            if cpu_stats and precpu_stats:
+                cpu_delta = cpu_stats.get('cpu_usage', {}).get('total_usage', 0) - \
+                            precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
+                system_cpu_delta = cpu_stats.get('system_cpu_usage', 0) - \
+                                   precpu_stats.get('system_cpu_usage', 0)
+
+                # online_cpus might not be present, fallback to number of percpu_usage or 1
+                online_cpus = cpu_stats.get('online_cpus',
+                                            len(cpu_stats.get('cpu_usage', {}).get('percpu_usage', [])) or 1)
+
+                if system_cpu_delta > 0 and cpu_delta > 0 and online_cpus > 0:
+                    cpu_percent = (cpu_delta / system_cpu_delta) * online_cpus * 100.0
+                    cpu_usage = f"{round(cpu_percent, 2)}%"
                 else:
                     cpu_usage = "0.00%"
             print(f"CPU metrics processed for '{container.name}'.")
@@ -331,10 +346,10 @@ def get_container_metrics(container_id):
 
         memory_usage = 'N/A'
         try:
-            if 'memory_stats' in stats_data and 'usage' in stats_data['memory_stats'] and 'limit' in stats_data[
-                'memory_stats']:
-                mem_usage = stats_data['memory_stats']['usage']
-                mem_limit = stats_data['memory_stats']['limit']
+            memory_stats = stats_data.get('memory_stats', {})
+            if 'usage' in memory_stats and 'limit' in memory_stats:
+                mem_usage = memory_stats['usage']
+                mem_limit = memory_stats['limit']
                 if mem_limit > 0:
                     memory_usage = f"{format_size(mem_usage)} / {format_size(mem_limit)} ({round((mem_usage / mem_limit) * 100, 2)}%)"
                 else:

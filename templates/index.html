@@ -3,51 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Environment Monitoring</title>
+    <title>Docker Environment Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        /* Custom styles for Inter font and general aesthetics */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f8fafc; /* Lighter background for a cleaner look */
+            background-color: #f1f5f9; /* Lighter slate background */
         }
-        /* Style for action buttons to ensure consistent sizing and appearance */
         .action-button {
             @apply px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md;
         }
-        .action-button.start {
-            @apply bg-green-600 hover:bg-green-700 text-white;
-        }
-        .action-button.stop {
-            @apply bg-red-600 hover:bg-red-700 text-white;
-        }
-        .action-button.restart {
-            @apply bg-blue-600 hover:bg-blue-700 text-white;
-        }
-        .action-button.remove {
-            @apply bg-gray-600 hover:bg-gray-700 text-white;
-        }
-        .action-button.logs {
-            @apply bg-purple-600 hover:bg-purple-700 text-white;
-        }
-        .action-button.details { /* New style for details button */
-            @apply bg-indigo-600 hover:bg-indigo-700 text-white;
-        }
-        /* Table row styling for status */
-        .table-row-running {
-            @apply bg-green-50 text-green-800 hover:bg-green-100;
-        }
-        .table-row-exited {
-            @apply bg-red-50 text-red-800 hover:bg-red-100;
-        }
-        .table-row-other {
-            @apply bg-blue-50 text-blue-800 hover:bg-blue-100;
-        }
+        .action-button.start { @apply bg-green-600 hover:bg-green-700 text-white; }
+        .action-button.stop { @apply bg-red-600 hover:bg-red-700 text-white; }
+        .action-button.restart { @apply bg-blue-600 hover:bg-blue-700 text-white; }
+        .action-button.remove { @apply bg-gray-600 hover:bg-gray-700 text-white; }
+        .action-button.logs { @apply bg-purple-600 hover:bg-purple-700 text-white; }
+        .action-button.details { @apply bg-indigo-600 hover:bg-indigo-700 text-white; }
 
-        /* Modal specific styles */
+        /* Status Badges */
+        .status-badge {
+            @apply px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider; /* Slightly more padding */
+            display: inline-flex; /* Align icon and text better */
+            align-items: center;
+            gap: 0.35rem; /* Space between icon and text */
+        }
+        .status-badge-running { @apply bg-green-200 text-green-800; }
+        .status-badge-exited { @apply bg-red-200 text-red-800; }
+        .status-badge-paused { @apply bg-yellow-200 text-yellow-800; }
+        .status-badge-restarting { @apply bg-blue-200 text-blue-800; }
+        .status-badge-dead { @apply bg-gray-300 text-gray-700; } /* Example for other statuses */
+        .status-badge-other { @apply bg-gray-200 text-gray-700; }
+
+
+        /* Table row styling for status */
+        .table-row-running { @apply bg-green-50 hover:bg-green-100; }
+        .table-row-exited { @apply bg-red-50 hover:bg-red-100; }
+        .table-row-other { @apply bg-blue-50 hover:bg-blue-100; }
+
+        /* Modal specific styles (mostly unchanged, already good) */
         .modal {
             display: none;
             position: fixed;
@@ -57,7 +53,7 @@
             width: 100%;
             height: 100%;
             overflow: auto;
-            background-color: rgba(0,0,0,0.7); /* Darker, more opaque overlay */
+            background-color: rgba(0,0,0,0.7);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -66,57 +62,56 @@
         .modal-content {
             background-color: #ffffff;
             margin: auto;
-            padding: 32px; /* Increased padding */
-            border-radius: 1.5rem; /* More rounded */
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* Stronger shadow */
+            padding: 32px;
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             width: 90%;
-            max-width: 850px; /* Adjusted max-width for details */
+            max-width: 850px;
             max-height: 90vh;
             display: flex;
             flex-direction: column;
-            animation: fadeInScale 0.3s ease-out; /* Fade in with slight scale */
+            animation: fadeInScale 0.3s ease-out;
         }
         .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #e2e8f0; /* Slate-200 */
+            border-bottom: 1px solid #e2e8f0;
             padding-bottom: 1.25rem;
             margin-bottom: 1.5rem;
         }
         .modal-title {
-            @apply text-3xl font-extrabold text-gray-900; /* Larger, bolder title */
+            @apply text-3xl font-extrabold text-gray-900;
         }
         .modal-body {
             flex-grow: 1;
             overflow-y: auto;
-            background-color: #1a202c; /* Darker background for logs/metrics */
-            color: #e2e8f0; /* Light text for logs */
+            background-color: #1a202c;
+            color: #e2e8f0;
             padding: 1.5rem;
             border-radius: 0.75rem;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace; /* Modern monospace font */
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
             white-space: pre-wrap;
             word-break: break-all;
             line-height: 1.5;
             font-size: 0.9rem;
         }
         .close-button {
-            color: #94a3b8; /* Slate-400 */
-            font-size: 36px; /* Even larger close button */
+            color: #94a3b8;
+            font-size: 36px;
             font-weight: bold;
             cursor: pointer;
             transition: color 0.2s ease-in-out;
         }
         .close-button:hover,
         .close-button:focus {
-            color: #475569; /* Slate-700 */
+            color: #475569;
         }
-        /* Loading spinner */
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.2);
-            border-top-color: #6366f1; /* Indigo 500 */
+            border-top-color: #6366f1;
             border-radius: 50%;
-            width: 40px; /* Larger spinner */
+            width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
         }
@@ -132,12 +127,119 @@
             from { opacity: 0; transform: scale(0.95); }
             to { opacity: 1; transform: scale(1); }
         }
+
+        /* Message Box specific styling */
+        #messageBox {
+            animation: slideInFromRight 0.5s ease-out forwards;
+        }
+        @keyframes slideInFromRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .message-box-hide {
+            animation: slideOutToRight 0.5s ease-in forwards;
+        }
+        @keyframes slideOutToRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+
+        /* Improved Table Responsiveness for smaller screens */
+        @media screen and (max-width: 768px) {
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+            thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+            tr {
+                border: 1px solid #e2e8f0;
+                margin-bottom: 0.75rem;
+                border-radius: 0.75rem;
+                overflow: hidden;
+            }
+            td {
+                border: none;
+                position: relative;
+                padding-left: 50%;
+                text-align: right;
+            }
+            td:before {
+                content: attr(data-label);
+                position: absolute;
+                left: 0;
+                width: 45%;
+                padding-left: 1rem;
+                white-space: nowrap;
+                text-align: left;
+                font-weight: bold;
+                color: #475569; /* slate-700 */
+            }
+            td:first-child {
+                border-top-left-radius: 0.75rem;
+                border-top-right-radius: 0.75rem;
+            }
+            td:last-child {
+                border-bottom-left-radius: 0.75rem;
+                border-bottom-right-radius: 0.75rem;
+            }
+        }
+
+        /* Enhanced Blinking Green Circle */
+        .status-circle-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.35rem;
+            vertical-align: middle;
+            flex-shrink: 0;
+            box-shadow: 0 0 5px currentColor;
+        }
+
+        .status-circle-icon.running {
+            background-color: #22c55e;
+            animation:
+                blink-green 1s infinite,
+                pulse-green 2s infinite;
+        }
+
+        .status-circle-icon.exited {
+            background-color: #ef4444;
+        }
+
+        .status-circle-icon.other {
+            background-color: #6b7280;
+        }
+
+        @keyframes blink-green {
+            0% {
+                opacity: 1;
+                box-shadow: 0 0 10px #22c55e;
+            }
+            50% {
+                opacity: 0.5;
+                box-shadow: 0 0 5px #22c55e;
+            }
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 10px #22c55e;
+            }
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 sm:p-6 md:p-8">
     <div class="max-w-7xl mx-auto bg-white shadow-3xl rounded-3xl p-8 sm:p-10 lg:p-12 border border-gray-200">
         <h1 class="text-5xl sm:text-6xl font-extrabold text-center mb-10 text-gray-900 leading-tight tracking-tight">
-            <i class="fas fa-server text-indigo-700 mr-5 animate-pulse"></i>Environment Monitoring
+            <i class="fas fa-server text-indigo-700 mr-5 animate-pulse"></i>Docker Environment Dashboard
         </h1>
 
         <div class="text-center text-gray-600 text-lg mb-8 font-medium">
@@ -234,46 +336,49 @@
                         {% else %}table-row-other
                         {% endif %}
                     ">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">{{ c.short_id }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ c.name }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ c.image_tag }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            {{ c.status }}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900" data-label="ID">{{ c.short_id }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-label="Name">{{ c.name }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Image">{{ c.image_tag }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Status">
+                            <span class="status-badge {% if 'Up' in c.status %}status-badge-running{% elif 'Exited' in c.status %}status-badge-exited{% else %}status-badge-other{% endif %}">
+                                <span class="status-circle-icon {% if 'Up' in c.status %}running{% elif 'Exited' in c.status %}exited{% else %}other{% endif %}"></span>
+                                {{ c.status }}
+                            </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ c.ports }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ c.created_at }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{{ c.size }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis">{{ c.command }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Ports">{{ c.ports }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Created">{{ c.created_at }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Size">{{ c.size }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Actions">
                             <div class="flex flex-wrap gap-3">
                                 {% if 'Up' in c.status %}
                                     <form action="/container/{{ c.id }}/stop" method="post" class="inline">
-                                        <button type="submit" class="action-button stop">
+                                        <button type="submit" class="action-button stop" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                             <i class="fas fa-stop mr-1"></i>Stop
                                         </button>
                                     </form>
                                     <form action="/container/{{ c.id }}/restart" method="post" class="inline">
-                                        <button type="submit" class="action-button restart">
+                                        <button type="submit" class="action-button restart" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                             <i class="fas fa-sync-alt mr-1"></i>Restart
                                         </button>
                                     </form>
                                 {% elif 'Exited' in c.status %}
                                     <form action="/container/{{ c.id }}/start" method="post" class="inline">
-                                        <button type="submit" class="action-button start">
+                                        <button type="submit" class="action-button start" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                             <i class="fas fa-play mr-1"></i>Start
                                         </button>
                                     </form>
-                                    <button type="button" onclick="confirmRemove('{{ c.id }}', '{{ c.name }}')" class="action-button remove">
+                                    <button type="button" onclick="confirmRemove('{{ c.id }}', '{{ c.name }}')" class="action-button remove" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                         <i class="fas fa-trash-alt mr-1"></i>Remove
                                     </button>
                                 {% else %}
-                                    <span class="text-gray-500 text-xs">No actions available</span>
+                                    <span class="px-3 py-1 text-xs text-gray-500 bg-gray-100 rounded-lg">No actions available</span>
                                 {% endif %}
-                                <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs">
+                                <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                     <i class="fas fa-file-alt mr-1"></i>Logs
                                 </button>
-                                <button type="button" onclick="viewMetrics('{{ c.id }}', '{{ c.name }}')" class="action-button details">
-                                    <i class="fas fa-chart-line mr-1"></i>Details
+                                <button type="button" onclick="viewMetrics('{{ c.id }}', '{{ c.name }}')" class="action-button details" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
+                                    <i class="fas fa-chart-line mr-1"></i>Metrics
                                 </button>
                             </div>
                         </td>
@@ -281,6 +386,13 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {% if not containers %}
+            <div class="p-8 text-center text-gray-500 text-lg">
+                <i class="fas fa-box-open text-6xl mb-4"></i>
+                <p>No containers found matching the current filter.</p>
+                <p class="mt-2">Try selecting "All" or starting a new container.</p>
+            </div>
+            {% endif %}
         </div>
 
         <div id="messageBox" class="fixed bottom-8 right-8 bg-blue-600 text-white px-8 py-4 rounded-xl shadow-2xl hidden z-50 transition-all duration-500 transform translate-y-full opacity-0">
@@ -329,9 +441,9 @@
                     <span class="close-button" onclick="closeMetricsModal()">&times;</span>
                 </div>
                 <div id="metricsModalBody" class="modal-body text-gray-100">
-                    <div class="flex items-center justify-center py-10">
+                    <div class="flex flex-col items-center justify-center py-10">
                         <div class="spinner"></div>
-                        <span class="ml-4 text-gray-400 text-lg">Loading metrics...</span>
+                        <span class="ml-4 text-gray-400 text-lg mt-4">Loading metrics...</span>
                     </div>
                 </div>
             </div>
@@ -340,28 +452,42 @@
     </div>
 
     <script>
+        // Centralized DOM elements
+        const DOMElements = {
+            messageBox: document.getElementById('messageBox'),
+            messageText: document.getElementById('messageText'),
+            lastRefreshedTime: document.getElementById('lastRefreshedTime'),
+            searchInput: document.getElementById('searchInput'),
+            containerTable: document.getElementById('containerTable'),
+            confirmationModal: document.getElementById('confirmationModal'),
+            confirmationTitle: document.getElementById('confirmationTitle'),
+            confirmationMessage: document.getElementById('confirmationMessage'),
+            confirmActionButton: document.getElementById('confirmActionButton'),
+            logsModal: document.getElementById('logsModal'),
+            logsModalTitle: document.getElementById('logsModalTitle'),
+            logsModalBody: document.getElementById('logsModalBody'),
+            metricsModal: document.getElementById('metricsModal'),
+            metricsModalTitle: document.getElementById('metricsModalTitle'),
+            metricsModalBody: document.getElementById('metricsModalBody'),
+        };
+
         // Function to show custom message box
         function showMessageBox(message, type = 'info') {
-            const messageBox = document.getElementById('messageBox');
-            const messageText = document.getElementById('messageText');
-            messageText.textContent = message;
+            DOMElements.messageText.textContent = message;
 
-            // Reset classes
-            messageBox.classList.remove('bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-600');
+            DOMElements.messageBox.classList.remove('bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'hidden', 'translate-y-full', 'opacity-0', 'message-box-hide');
 
-            // Set background based on type
             if (type === 'success') {
-                messageBox.classList.add('bg-green-600');
+                DOMElements.messageBox.classList.add('bg-green-600');
             } else if (type === 'error') {
-                messageBox.classList.add('bg-red-600');
+                DOMElements.messageBox.classList.add('bg-red-600');
             } else if (type === 'warning') {
-                messageBox.classList.add('bg-yellow-600');
+                DOMElements.messageBox.classList.add('bg-yellow-600');
             } else {
-                messageBox.classList.add('bg-blue-600');
+                DOMElements.messageBox.classList.add('bg-blue-600');
             }
 
-            messageBox.classList.remove('hidden', 'translate-y-full', 'opacity-0');
-            messageBox.classList.add('translate-y-0', 'opacity-100');
+            DOMElements.messageBox.classList.add('translate-y-0', 'opacity-100'); // Trigger initial animation
 
             setTimeout(() => {
                 hideMessageBox();
@@ -370,11 +496,10 @@
 
         // Function to hide custom message box
         function hideMessageBox() {
-            const messageBox = document.getElementById('messageBox');
-            messageBox.classList.remove('translate-y-0', 'opacity-100');
-            messageBox.classList.add('translate-y-full', 'opacity-0');
+            DOMElements.messageBox.classList.add('message-box-hide'); // Trigger fade-out animation
             setTimeout(() => {
-                messageBox.classList.add('hidden');
+                DOMElements.messageBox.classList.add('hidden');
+                DOMElements.messageBox.classList.remove('message-box-hide', 'translate-y-0', 'opacity-100'); // Reset classes for next show
             }, 500); // Allow transition to finish before hiding
         }
 
@@ -386,11 +511,22 @@
                 hour: '2-digit', minute: '2-digit', second: '2-digit',
                 hour12: true
             };
-            document.getElementById('lastRefreshedTime').textContent = now.toLocaleString('en-US', options);
+            DOMElements.lastRefreshedTime.textContent = now.toLocaleString('en-US', options);
         }
 
-        // Check for messages from Flask (e.g., after an action)
-        window.onload = function() {
+        // Handle Flask flashed messages on DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check for messages passed from Flask via Jinja2 (if integrated)
+            // Example of how Flask would embed these (from previous suggestion):
+            // {% with messages = get_flashed_messages(with_categories=true) %}
+            //   {% if messages %}
+            //     {% for category, message in messages %}
+            //       showMessageBox('{{ message | safe }}', '{{ category }}');
+            //     {% endfor %}
+            //   {% endif %}
+            // {% endwith %}
+
+            // If not using direct Jinja2 flash, keep the URL param logic as a fallback:
             const urlParams = new URLSearchParams(window.location.search);
             const message = urlParams.get('message');
             const messageType = urlParams.get('type');
@@ -408,21 +544,18 @@
 
             // Initial call to display last refreshed time
             updateLastRefreshedTime();
-            // No setInterval for this as it only updates on page load/refresh
-        };
+        });
 
         // JavaScript for table search/filter
         function filterTable() {
-            const input = document.getElementById("searchInput");
-            const filter = input.value.toLowerCase();
-            const table = document.getElementById("containerTable");
-            const tr = table.getElementsByTagName("tr");
+            const filter = DOMElements.searchInput.value.toLowerCase();
+            const tr = DOMElements.containerTable.getElementsByTagName("tr");
 
             for (let i = 1; i < tr.length; i++) { // Start from 1 to skip header row
                 let found = false;
-                // Get all cells in the current row
                 const td = tr[i].getElementsByTagName("td");
                 for (let j = 0; j < td.length; j++) {
+                    // Check against relevant columns (e.g., Name, ID, Image, Status)
                     const cellText = td[j].textContent || td[j].innerText;
                     if (cellText.toLowerCase().indexOf(filter) > -1) {
                         found = true;
@@ -441,11 +574,11 @@
         let currentConfirmAction = null;
 
         function showConfirmationModal(title, message, confirmCallback) {
-            document.getElementById('confirmationModal').classList.remove('hidden');
-            document.getElementById('confirmationTitle').textContent = title;
-            document.getElementById('confirmationMessage').textContent = message;
+            DOMElements.confirmationModal.classList.remove('hidden');
+            DOMElements.confirmationTitle.textContent = title;
+            DOMElements.confirmationMessage.textContent = message;
             currentConfirmAction = confirmCallback;
-            document.getElementById('confirmActionButton').onclick = () => {
+            DOMElements.confirmActionButton.onclick = () => {
                 if (currentConfirmAction) {
                     currentConfirmAction();
                 }
@@ -454,16 +587,15 @@
         }
 
         function closeConfirmationModal() {
-            document.getElementById('confirmationModal').classList.add('hidden');
+            DOMElements.confirmationModal.classList.add('hidden');
             currentConfirmAction = null;
         }
 
         function confirmRemove(containerId, containerName) {
             showConfirmationModal(
-                'Confirm Removal',
+                'Confirm Container Removal',
                 `Are you sure you want to remove container '${containerName}'? This action cannot be undone.`,
                 () => {
-                    // Create a temporary form and submit it
                     const form = document.createElement('form');
                     form.method = 'post';
                     form.action = `/container/${containerId}/remove`;
@@ -473,121 +605,141 @@
             );
         }
 
+        // --- Generic Modal Loading State Functions ---
+        function showModalLoading(modalBodyElement, message = 'Loading data...') {
+            modalBodyElement.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10">
+                    <div class="spinner"></div>
+                    <span class="ml-4 text-gray-400 text-lg mt-4">${message}</span>
+                </div>
+            `;
+            modalBodyElement.classList.remove('flex-row');
+            modalBodyElement.classList.add('flex-col', 'items-center', 'justify-center');
+        }
+
+        function hideModalLoading(modalBodyElement) {
+            modalBodyElement.classList.remove('flex-col', 'items-center', 'justify-center');
+        }
+
         // --- Logs Modal Functions ---
         async function viewLogs(containerId, containerName) {
-            const logsModal = document.getElementById('logsModal');
-            const logsModalTitle = document.getElementById('logsModalTitle');
-            const logsModalBody = document.getElementById('logsModalBody');
-
-            logsModalTitle.textContent = `Logs for ${containerName}`;
-            // Show loading spinner
-            logsModalBody.innerHTML = '<div class="flex flex-col items-center justify-center py-10"><div class="spinner"></div><span class="ml-4 text-gray-400 text-lg mt-4">Loading logs...</span></div>';
-            logsModalBody.classList.remove('flex-row'); // Ensure no previous flex row from metrics
-            logsModalBody.classList.add('flex-col', 'items-center', 'justify-center'); // Center content
-            logsModal.classList.remove('hidden');
+            DOMElements.logsModalTitle.textContent = `Logs for ${containerName}`;
+            showModalLoading(DOMElements.logsModalBody, 'Loading container logs...');
+            DOMElements.logsModal.classList.remove('hidden');
 
             try {
                 const response = await fetch(`/container/${containerId}/logs`);
                 if (!response.ok) {
-                    const errorText = await response.text(); // Get detailed error
+                    const errorText = await response.text();
                     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
                 const data = await response.json();
-                logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Remove centering
+
+                hideModalLoading(DOMElements.logsModalBody); // Hide loading state
                 if (data.logs) {
-                    logsModalBody.textContent = data.logs;
+                    DOMElements.logsModalBody.textContent = data.logs;
+                    // Autoscroll to bottom for logs
+                    DOMElements.logsModalBody.scrollTop = DOMElements.logsModalBody.scrollHeight;
                 } else {
-                    logsModalBody.textContent = 'No logs available or an error occurred.';
+                    DOMElements.logsModalBody.textContent = 'No logs available or an error occurred.';
                 }
             } catch (error) {
                 console.error("Failed to fetch logs:", error);
-                logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Remove centering
-                logsModalBody.textContent = `Failed to load logs: ${error.message}`;
+                hideModalLoading(DOMElements.logsModalBody); // Hide loading state
+                DOMElements.logsModalBody.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10 text-center">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
+                        <span class="text-red-400 text-lg">Failed to load logs: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
+                    </div>
+                `;
                 showMessageBox(`Failed to load logs for ${containerName}.`, 'error');
             }
         }
 
         function closeLogsModal() {
-            document.getElementById('logsModal').classList.add('hidden');
-            document.getElementById('logsModalBody').textContent = ''; // Clear content
+            DOMElements.logsModal.classList.add('hidden');
+            DOMElements.logsModalBody.textContent = ''; // Clear content
         }
 
         function copyLogsToClipboard() {
-            const logsText = document.getElementById('logsModalBody').textContent;
+            const logsText = DOMElements.logsModalBody.textContent;
             if (logsText) {
                 navigator.clipboard.writeText(logsText).then(() => {
                     showMessageBox('Logs copied to clipboard!', 'success');
                 }).catch(err => {
-                    console.error('Failed to copy logs:', err);
-                    showMessageBox('Failed to copy logs. Please copy manually (browser might restrict access).', 'error');
+                    console.error('Failed to copy logs: ', err);
+                    showMessageBox('Failed to copy logs.', 'error');
                 });
             }
         }
 
-        // --- Metrics/Details Modal Functions (NEW) ---
+        // --- Metrics Modal Functions ---
         async function viewMetrics(containerId, containerName) {
-            const metricsModal = document.getElementById('metricsModal');
-            const metricsModalTitle = document.getElementById('metricsModalTitle');
-            const metricsModalBody = document.getElementById('metricsModalBody');
-
-            metricsModalTitle.textContent = `Details & Metrics for ${containerName}`;
-            metricsModalBody.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-10">
-                    <div class="spinner"></div>
-                    <span class="ml-4 text-gray-400 text-lg mt-4">Loading metrics...</span>
-                </div>
-            `;
-            metricsModal.classList.remove('hidden');
+            DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
+            showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
+            DOMElements.metricsModal.classList.remove('hidden');
 
             try {
                 const response = await fetch(`/container/${containerId}/metrics`);
                 if (!response.ok) {
-                    const errorText = await response.text(); // Get detailed error
+                    const errorText = await response.text();
                     throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
                 }
                 const data = await response.json();
 
-                // Build the content for the metrics modal body
-                let contentHtml = `
-                    <p class="text-xl font-bold text-gray-50 mb-4">Last Updated: ${data.timestamp || 'N/A'}</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
-                            <h3 class="text-lg font-semibold text-gray-200 mb-3"><i class="fas fa-microchip mr-2 text-blue-400"></i>CPU Usage</h3>
-                            <p class="text-3xl font-bold text-green-400">${data.cpu_usage || 'N/A'}</p>
-                        </div>
-                        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
-                            <h3 class="text-lg font-semibold text-gray-200 mb-3"><i class="fas fa-memory mr-2 text-purple-400"></i>Memory Usage</h3>
-                            <p class="text-3xl font-bold text-yellow-400">${data.memory_usage || 'N/A'}</p>
-                        </div>
-                    </div>
+                hideModalLoading(DOMElements.metricsModalBody); // Hide loading state
 
-                    <h3 class="text-lg font-semibold text-gray-50 mb-3"><i class="fas fa-network-wired mr-2 text-orange-400"></i>Network I/O</h3>
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8">
-                        ${Object.keys(data.network_io).length > 0 ? Object.entries(data.network_io).map(([net_name, net_data]) => `
-                            <div class="mb-2 last:mb-0">
-                                <p class="text-gray-300 font-medium">${net_name}:</p>
-                                <p class="ml-4 text-gray-200">Received: <span class="text-cyan-300">${net_data.rx_bytes || 'N/A'}</span></p>
-                                <p class="ml-4 text-gray-200">Transmitted: <span class="text-fuchsia-300">${net_data.tx_bytes || 'N/A'}</span></p>
-                            </div>
-                        `).join('') : '<p class="text-gray-400">No network data available.</p>'}
-                    </div>
+                if (data.error) {
+                    DOMElements.metricsModalBody.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-10 text-center">
+                            <i class="fas fa-exclamation-triangle text-yellow-500 text-5xl mb-4"></i>
+                            <span class="text-yellow-400 text-lg">${data.error}</span>
+                        </div>
+                    `;
+                    showMessageBox(`Metrics for ${containerName}: ${data.error}`, 'warning');
+                    return;
+                }
 
-                    <h3 class="text-lg font-semibold text-gray-50 mb-3"><i class="fas fa-hdd mr-2 text-red-400"></i>Block I/O (Disk)</h3>
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
-                        <p class="text-gray-200">Read: <span class="text-lime-300">${data.block_io.read_bytes || 'N/A'}</span></p>
-                        <p class="text-gray-200">Write: <span class="text-rose-300">${data.block_io.write_bytes || 'N/A'}</span></p>
+                // Format network data
+                let networkHtml = '<div><h3 class="text-xl font-semibold text-gray-50 mb-3">Network I/O:</h3>';
+                if (Object.keys(data.network_io).length > 0) {
+                    for (const netName in data.network_io) {
+                        networkHtml += `<p class="text-gray-300 ml-4">${netName}: Rx: <span class="font-bold text-blue-300">${data.network_io[netName].rx_bytes}</span>, Tx: <span class="font-bold text-blue-300">${data.network_io[netName].tx_bytes}</span></p>`;
+                    }
+                } else {
+                    networkHtml += '<p class="text-gray-400 ml-4">No network data available.</p>';
+                }
+                networkHtml += '</div>';
+
+                // Construct metrics display
+                DOMElements.metricsModalBody.innerHTML = `
+                    <div class="space-y-6">
+                        <div class="p-6 bg-gray-800 rounded-lg shadow-inner">
+                            <h3 class="text-xl font-semibold text-gray-50 mb-3">Resource Usage:</h3>
+                            <p class="text-lg text-gray-300 ml-4"><i class="fas fa-microchip text-blue-400 mr-2"></i><strong>CPU Usage:</strong> <span class="font-bold text-teal-300">${data.cpu_usage}</span></p>
+                            <p class="text-lg text-gray-300 ml-4 mt-2"><i class="fas fa-memory text-purple-400 mr-2"></i><strong>Memory Usage:</strong> <span class="font-bold text-teal-300">${data.memory_usage}</span></p>
+                        </div>
+
+                        <div class="p-6 bg-gray-800 rounded-lg shadow-inner">
+                            ${networkHtml}
+                        </div>
+
+                        <div class="p-6 bg-gray-800 rounded-lg shadow-inner">
+                            <h3 class="text-xl font-semibold text-gray-50 mb-3">Block I/O:</h3>
+                            <p class="text-lg text-gray-300 ml-4"><i class="fas fa-hdd text-orange-400 mr-2"></i><strong>Disk Read:</strong> <span class="font-bold text-blue-300">${data.block_io.read_bytes}</span></p>
+                            <p class="text-lg text-gray-300 ml-4 mt-2"><i class="fas fa-hdd text-orange-400 mr-2"></i><strong>Disk Write:</strong> <span class="font-bold text-blue-300">${data.block_io.write_bytes}</span></p>
+                        </div>
+
+                        <p class="text-right text-gray-500 text-sm mt-6">Last updated: ${data.timestamp}</p>
                     </div>
                 `;
-
-                metricsModalBody.innerHTML = contentHtml;
-                metricsModalBody.classList.remove('flex', 'items-center', 'justify-center', 'flex-col'); // Remove centering for actual content
-
             } catch (error) {
                 console.error("Failed to fetch metrics:", error);
-                metricsModalBody.innerHTML = `
-                    <div class="flex flex-col items-center justify-center py-10">
+                hideModalLoading(DOMElements.metricsModalBody); // Hide loading state
+                DOMElements.metricsModalBody.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-10 text-center">
                         <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
-                        <span class="text-red-400 text-lg text-center">Failed to load metrics: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
+                        <span class="text-red-400 text-lg">Failed to load metrics: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
                     </div>
                 `;
                 showMessageBox(`Failed to load metrics for ${containerName}.`, 'error');
@@ -595,8 +747,8 @@
         }
 
         function closeMetricsModal() {
-            document.getElementById('metricsModal').classList.add('hidden');
-            document.getElementById('metricsModalBody').innerHTML = ''; // Clear content
+            DOMElements.metricsModal.classList.add('hidden');
+            DOMElements.metricsModalBody.textContent = ''; // Clear content
         }
     </script>
 </body>
