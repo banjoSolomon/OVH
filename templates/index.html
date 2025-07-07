@@ -11,7 +11,7 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f1f5f9; /* Lighter slate background */
+            background-color: #f1f5f9;
         }
         .action-button {
             @apply px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md;
@@ -25,25 +25,61 @@
 
         /* Status Badges */
         .status-badge {
-            @apply px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider; /* Slightly more padding */
-            display: inline-flex; /* Align icon and text better */
+            @apply px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider;
+            display: inline-flex;
             align-items: center;
-            gap: 0.35rem; /* Space between icon and text */
+            gap: 0.35rem;
         }
         .status-badge-running { @apply bg-green-200 text-green-800; }
         .status-badge-exited { @apply bg-red-200 text-red-800; }
         .status-badge-paused { @apply bg-yellow-200 text-yellow-800; }
         .status-badge-restarting { @apply bg-blue-200 text-blue-800; }
-        .status-badge-dead { @apply bg-gray-300 text-gray-700; } /* Example for other statuses */
+        .status-badge-dead { @apply bg-gray-300 text-gray-700; }
         .status-badge-other { @apply bg-gray-200 text-gray-700; }
 
-
-        /* Table row styling for status */
+        /* Table row styling */
         .table-row-running { @apply bg-green-50 hover:bg-green-100; }
         .table-row-exited { @apply bg-red-50 hover:bg-red-100; }
         .table-row-other { @apply bg-blue-50 hover:bg-blue-100; }
 
-        /* Modal specific styles (mostly unchanged, already good) */
+        /* Blinking Green Circle - Fixed Version */
+        .status-circle-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.35rem;
+        }
+
+        .status-circle-icon.running {
+            background-color: #22c55e;
+            animation: blink-green 1s ease-in-out infinite;
+        }
+
+        .status-circle-icon.exited {
+            background-color: #ef4444;
+        }
+
+        .status-circle-icon.other {
+            background-color: #6b7280;
+        }
+
+        @keyframes blink-green {
+            0% {
+                opacity: 1;
+                box-shadow: 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+            50% {
+                opacity: 0.5;
+                box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
+            }
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 rgba(34, 197, 94, 0.7);
+            }
+        }
+
+        /* Modal styles */
         .modal {
             display: none;
             position: fixed;
@@ -62,7 +98,7 @@
         .modal-content {
             background-color: #ffffff;
             margin: auto;
-            padding: 32px;
+            padding: 32px; /* Retain padding around content */
             border-radius: 1.5rem;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             width: 90%;
@@ -72,41 +108,17 @@
             flex-direction: column;
             animation: fadeInScale 0.3s ease-out;
         }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 1.25rem;
-            margin-bottom: 1.5rem;
+
+        @keyframes fadeInOverlay {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
-        .modal-title {
-            @apply text-3xl font-extrabold text-gray-900;
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
-        .modal-body {
-            flex-grow: 1;
-            overflow-y: auto;
-            background-color: #1a202c;
-            color: #e2e8f0;
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            white-space: pre-wrap;
-            word-break: break-all;
-            line-height: 1.5;
-            font-size: 0.9rem;
-        }
-        .close-button {
-            color: #94a3b8;
-            font-size: 36px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: color 0.2s ease-in-out;
-        }
-        .close-button:hover,
-        .close-button:focus {
-            color: #475569;
-        }
+
+        /* Spinner animation */
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.2);
             border-top-color: #6366f1;
@@ -119,32 +131,8 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        @keyframes fadeInOverlay {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes fadeInScale {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
 
-        /* Message Box specific styling */
-        #messageBox {
-            animation: slideInFromRight 0.5s ease-out forwards;
-        }
-        @keyframes slideInFromRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        .message-box-hide {
-            animation: slideOutToRight 0.5s ease-in forwards;
-        }
-        @keyframes slideOutToRight {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-
-        /* Improved Table Responsiveness for smaller screens */
+        /* Responsive table */
         @media screen and (max-width: 768px) {
             table, thead, tbody, th, td, tr {
                 display: block;
@@ -175,64 +163,42 @@
                 white-space: nowrap;
                 text-align: left;
                 font-weight: bold;
-                color: #475569; /* slate-700 */
-            }
-            td:first-child {
-                border-top-left-radius: 0.75rem;
-                border-top-right-radius: 0.75rem;
-            }
-            td:last-child {
-                border-bottom-left-radius: 0.75rem;
-                border-bottom-right-radius: 0.75rem;
+                color: #475569;
             }
         }
 
-        /* Enhanced Blinking Green Circle */
-        .status-circle-icon {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 0.35rem;
-            vertical-align: middle;
-            flex-shrink: 0;
-            box-shadow: 0 0 5px currentColor;
+        /* Log content specific styling */
+        .log-content {
+            font-family: 'JetBrains Mono', monospace; /* Apply monospaced font */
+            font-size: 0.875rem; /* Slightly smaller font for compactness */
+            line-height: 1.4; /* Improve line spacing */
+            white-space: pre-wrap; /* Preserve whitespace and wrap lines */
+            word-break: break-all; /* Break long words */
+            background-color: #1f2937; /* Dark background for logs */
+            color: #e5e7eb; /* Light text for contrast */
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            overflow-y: auto; /* Enable vertical scrolling */
+            max-height: 60vh; /* Max height for log area relative to viewport */
+            flex-grow: 1; /* Allow content to grow within the modal body */
+            border: 1px solid #374151; /* Subtle border */
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            text-align: left; /* Ensure text aligns left */
         }
 
-        .status-circle-icon.running {
-            background-color: #22c55e;
-            animation:
-                blink-green 1s infinite,
-                pulse-green 2s infinite;
+        /* Adjust modal-body to correctly contain the log-content */
+        .modal-body {
+            padding: 0; /* Remove padding from modal-body itself if log-content has its own */
+            overflow: hidden; /* Prevent modal-body scrollbar if log-content handles it */
+            display: flex; /* Make modal-body a flex container */
+            flex-direction: column; /* Stack content vertically */
+            /* Added margin-top for space between header and log content */
+            margin-top: 1rem;
         }
 
-        .status-circle-icon.exited {
-            background-color: #ef4444;
-        }
-
-        .status-circle-icon.other {
-            background-color: #6b7280;
-        }
-
-        @keyframes blink-green {
-            0% {
-                opacity: 1;
-                box-shadow: 0 0 10px #22c55e;
-            }
-            50% {
-                opacity: 0.5;
-                box-shadow: 0 0 5px #22c55e;
-            }
-            100% {
-                opacity: 1;
-                box-shadow: 0 0 10px #22c55e;
-            }
-        }
-
-        @keyframes pulse-green {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
+        /* Ensure the modal-content has padding around the log area */
+        .modal-content .modal-header {
+            padding-bottom: 0; /* Remove bottom padding from header if modal-body has margin-top */
         }
     </style>
 </head>
@@ -331,7 +297,7 @@
                 <tbody class="bg-white divide-y divide-gray-100">
                     {% for c in containers %}
                     <tr class="
-                        {% if 'Up' in c.status %}table-row-running
+                        {% if 'Up' in c.status or 'running' in c.status.lower() %}table-row-running
                         {% elif 'Exited' in c.status %}table-row-exited
                         {% else %}table-row-other
                         {% endif %}
@@ -340,8 +306,8 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-label="Name">{{ c.name }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Image">{{ c.image_tag }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Status">
-                            <span class="status-badge {% if 'Up' in c.status %}status-badge-running{% elif 'Exited' in c.status %}status-badge-exited{% else %}status-badge-other{% endif %}">
-                                <span class="status-circle-icon {% if 'Up' in c.status %}running{% elif 'Exited' in c.status %}exited{% else %}other{% endif %}"></span>
+                            <span class="status-badge {% if 'Up' in c.status or 'running' in c.status.lower() %}status-badge-running{% elif 'Exited' in c.status %}status-badge-exited{% else %}status-badge-other{% endif %}">
+                                <span class="status-circle-icon {% if 'Up' in c.status or 'running' in c.status.lower() %}running{% elif 'Exited' in c.status %}exited{% else %}other{% endif %}"></span>
                                 {{ c.status }}
                             </span>
                         </td>
@@ -351,7 +317,7 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Actions">
                             <div class="flex flex-wrap gap-3">
-                                {% if 'Up' in c.status %}
+                                {% if 'Up' in c.status or 'running' in c.status.lower() %}
                                     <form action="/container/{{ c.id }}/stop" method="post" class="inline">
                                         <button type="submit" class="action-button stop" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                             <i class="fas fa-stop mr-1"></i>Stop
@@ -487,20 +453,20 @@
                 DOMElements.messageBox.classList.add('bg-blue-600');
             }
 
-            DOMElements.messageBox.classList.add('translate-y-0', 'opacity-100'); // Trigger initial animation
+            DOMElements.messageBox.classList.add('translate-y-0', 'opacity-100');
 
             setTimeout(() => {
                 hideMessageBox();
-            }, 5000); // Hide after 5 seconds
+            }, 5000);
         }
 
         // Function to hide custom message box
         function hideMessageBox() {
-            DOMElements.messageBox.classList.add('message-box-hide'); // Trigger fade-out animation
+            DOMElements.messageBox.classList.add('message-box-hide');
             setTimeout(() => {
                 DOMElements.messageBox.classList.add('hidden');
-                DOMElements.messageBox.classList.remove('message-box-hide', 'translate-y-0', 'opacity-100'); // Reset classes for next show
-            }, 500); // Allow transition to finish before hiding
+                DOMElements.messageBox.classList.remove('message-box-hide', 'translate-y-0', 'opacity-100');
+            }, 500);
         }
 
         // Function to update the last refreshed time
@@ -516,33 +482,19 @@
 
         // Handle Flask flashed messages on DOMContentLoaded
         document.addEventListener('DOMContentLoaded', function() {
-            // Check for messages passed from Flask via Jinja2 (if integrated)
-            // Example of how Flask would embed these (from previous suggestion):
-            // {% with messages = get_flashed_messages(with_categories=true) %}
-            //   {% if messages %}
-            //     {% for category, message in messages %}
-            //       showMessageBox('{{ message | safe }}', '{{ category }}');
-            //     {% endfor %}
-            //   {% endif %}
-            // {% endwith %}
-
-            // If not using direct Jinja2 flash, keep the URL param logic as a fallback:
             const urlParams = new URLSearchParams(window.location.search);
             const message = urlParams.get('message');
             const messageType = urlParams.get('type');
             if (message && messageType) {
                 showMessageBox(decodeURIComponent(message), messageType);
-                // Clean up URL parameters to avoid showing message again on refresh
                 const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + (urlParams.toString().replace(`message=${encodeURIComponent(message)}&type=${messageType}`, '').replace('&&', '&').replace(/\?&$/, '?'));
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
-            // Set up auto-refresh (every 1 minute)
             setInterval(() => {
                 location.reload();
-            }, 60000); // 60000 milliseconds = 1 minute
+            }, 60000);
 
-            // Initial call to display last refreshed time
             updateLastRefreshedTime();
         });
 
@@ -551,11 +503,10 @@
             const filter = DOMElements.searchInput.value.toLowerCase();
             const tr = DOMElements.containerTable.getElementsByTagName("tr");
 
-            for (let i = 1; i < tr.length; i++) { // Start from 1 to skip header row
+            for (let i = 1; i < tr.length; i++) {
                 let found = false;
                 const td = tr[i].getElementsByTagName("td");
                 for (let j = 0; j < td.length; j++) {
-                    // Check against relevant columns (e.g., Name, ID, Image, Status)
                     const cellText = td[j].textContent || td[j].innerText;
                     if (cellText.toLowerCase().indexOf(filter) > -1) {
                         found = true;
@@ -635,17 +586,26 @@
                 }
                 const data = await response.json();
 
-                hideModalLoading(DOMElements.logsModalBody); // Hide loading state
+                hideModalLoading(DOMElements.logsModalBody);
                 if (data.logs) {
-                    DOMElements.logsModalBody.textContent = data.logs;
-                    // Autoscroll to bottom for logs
-                    DOMElements.logsModalBody.scrollTop = DOMElements.logsModalBody.scrollHeight;
+                    // Create a <pre> tag to preserve whitespace and add the log-content class
+                    const preElement = document.createElement('pre');
+                    preElement.classList.add('log-content'); // Apply new log styling
+                    preElement.textContent = data.logs;
+                    DOMElements.logsModalBody.innerHTML = ''; // Clear loading state
+                    DOMElements.logsModalBody.appendChild(preElement); // Append the pre-formatted logs
+                    preElement.scrollTop = preElement.scrollHeight; // Scroll to bottom
                 } else {
-                    DOMElements.logsModalBody.textContent = 'No logs available or an error occurred.';
+                    DOMElements.logsModalBody.innerHTML = `
+                        <div class="flex flex-col items-center justify-center py-10 text-center">
+                            <i class="fas fa-info-circle text-gray-500 text-5xl mb-4"></i>
+                            <span class="text-gray-400 text-lg">No logs available or an error occurred.</span>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error("Failed to fetch logs:", error);
-                hideModalLoading(DOMElements.logsModalBody); // Hide loading state
+                hideModalLoading(DOMElements.logsModalBody);
                 DOMElements.logsModalBody.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-10 text-center">
                         <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
@@ -658,11 +618,12 @@
 
         function closeLogsModal() {
             DOMElements.logsModal.classList.add('hidden');
-            DOMElements.logsModalBody.textContent = ''; // Clear content
+            DOMElements.logsModalBody.innerHTML = ''; // Clear content when closing
         }
 
         function copyLogsToClipboard() {
-            const logsText = DOMElements.logsModalBody.textContent;
+            // Get the text content from the <pre> tag within the logsModalBody
+            const logsText = DOMElements.logsModalBody.querySelector('.log-content')?.textContent || '';
             if (logsText) {
                 navigator.clipboard.writeText(logsText).then(() => {
                     showMessageBox('Logs copied to clipboard!', 'success');
@@ -670,10 +631,42 @@
                     console.error('Failed to copy logs: ', err);
                     showMessageBox('Failed to copy logs.', 'error');
                 });
+            } else {
+                showMessageBox('No logs to copy.', 'warning');
             }
         }
 
         // --- Metrics Modal Functions ---
+        // Helper function to calculate uptime from ISO string
+        function calculateUptime(startedAtISO) {
+            if (!startedAtISO || startedAtISO === 'N/A') return 'N/A';
+            try {
+                const startedTime = new Date(startedAtISO);
+                const now = new Date();
+                const diffMs = now - startedTime; // Difference in milliseconds
+
+                const seconds = Math.floor(diffMs / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+
+                const s = seconds % 60;
+                const m = minutes % 60;
+                const h = hours % 24;
+
+                let uptimeString = '';
+                if (days > 0) uptimeString += `${days}d `;
+                if (hours > 0 || days > 0) uptimeString += `${h}h `;
+                if (minutes > 0 || hours > 0 || days > 0) uptimeString += `${m}m `;
+                uptimeString += `${s}s`;
+
+                return uptimeString.trim();
+            } catch (e) {
+                console.error("Error calculating uptime:", e);
+                return 'N/A';
+            }
+        }
+
         async function viewMetrics(containerId, containerName) {
             DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
             showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
@@ -687,7 +680,7 @@
                 }
                 const data = await response.json();
 
-                hideModalLoading(DOMElements.metricsModalBody); // Hide loading state
+                hideModalLoading(DOMElements.metricsModalBody);
 
                 if (data.error) {
                     DOMElements.metricsModalBody.innerHTML = `
@@ -700,42 +693,63 @@
                     return;
                 }
 
-                // Format network data
+                // Format network data with nullish coalescing
                 let networkHtml = '<div><h3 class="text-xl font-semibold text-gray-50 mb-3">Network I/O:</h3>';
-                if (Object.keys(data.network_io).length > 0) {
+                if (data.network_io && Object.keys(data.network_io).length > 0) {
                     for (const netName in data.network_io) {
-                        networkHtml += `<p class="text-gray-300 ml-4">${netName}: Rx: <span class="font-bold text-blue-300">${data.network_io[netName].rx_bytes}</span>, Tx: <span class="font-bold text-blue-300">${data.network_io[netName].tx_bytes}</span></p>`;
+                        const rxBytes = data.network_io[netName]?.rx_bytes ?? 'N/A';
+                        const txBytes = data.network_io[netName]?.tx_bytes ?? 'N/A';
+                        networkHtml += `<p class="text-gray-300 ml-4">${netName}: Rx: <span class="font-bold text-blue-300">${rxBytes}</span>, Tx: <span class="font-bold text-blue-300">${txBytes}</span></p>`;
                     }
                 } else {
                     networkHtml += '<p class="text-gray-400 ml-4">No network data available.</p>';
                 }
                 networkHtml += '</div>';
 
-                // Construct metrics display
+                // Safely access disk_io properties using optional chaining and nullish coalescing
+                const readBytes = data.disk_io?.read_bytes ?? 'N/A';
+                const writeBytes = data.disk_io?.write_bytes ?? 'N/A';
+
+                // Display metrics data
                 DOMElements.metricsModalBody.innerHTML = `
-                    <div class="space-y-6">
-                        <div class="p-6 bg-gray-800 rounded-lg shadow-inner">
-                            <h3 class="text-xl font-semibold text-gray-50 mb-3">Resource Usage:</h3>
-                            <p class="text-lg text-gray-300 ml-4"><i class="fas fa-microchip text-blue-400 mr-2"></i><strong>CPU Usage:</strong> <span class="font-bold text-teal-300">${data.cpu_usage}</span></p>
-                            <p class="text-lg text-gray-300 ml-4 mt-2"><i class="fas fa-memory text-purple-400 mr-2"></i><strong>Memory Usage:</strong> <span class="font-bold text-teal-300">${data.memory_usage}</span></p>
+                    <div class="px-6 py-4 bg-gray-700 text-white rounded-lg shadow-inner overflow-y-auto max-h-[60vh]">
+                        <h3 class="text-2xl font-bold mb-4 text-indigo-300">Container Resource Usage</h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                            <div class="bg-gray-800 p-5 rounded-lg shadow-md">
+                                <p class="text-lg font-semibold text-green-400 mb-2"><i class="fas fa-microchip mr-2"></i>CPU Usage:</p>
+                                <p class="text-4xl font-extrabold text-white">${data.cpu_percentage ?? 'N/A'}%</p>
+                            </div>
+                            <div class="bg-gray-800 p-5 rounded-lg shadow-md">
+                                <p class="text-lg font-semibold text-blue-400 mb-2"><i class="fas fa-memory mr-2"></i>Memory Usage:</p>
+                                <p class="text-4xl font-extrabold text-white">${data.memory_usage ?? 'N/A'}</p>
+                                <p class="text-sm text-gray-400">Limit: ${data.memory_limit ?? 'N/A'}</p>
+                            </div>
                         </div>
 
-                        <div class="p-6 bg-gray-800 rounded-lg shadow-inner">
+                        <div class="mb-6 bg-gray-800 p-5 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold text-purple-400 mb-3"><i class="fas fa-hdd mr-2"></i>Disk I/O:</h3>
+                            <p class="text-lg text-white">Read: <span class="font-bold text-orange-300">${readBytes}</span></p>
+                            <p class="text-lg text-white">Write: <span class="font-bold text-orange-300">${writeBytes}</span></p>
+                        </div>
+
+                        <div class="mb-6 bg-gray-800 p-5 rounded-lg shadow-md">
                             ${networkHtml}
                         </div>
 
-                        <div class="p-6 bg-gray-800 rounded-lg shadow-inner">
-                            <h3 class="text-xl font-semibold text-gray-50 mb-3">Block I/O:</h3>
-                            <p class="text-lg text-gray-300 ml-4"><i class="fas fa-hdd text-orange-400 mr-2"></i><strong>Disk Read:</strong> <span class="font-bold text-blue-300">${data.block_io.read_bytes}</span></p>
-                            <p class="text-lg text-gray-300 ml-4 mt-2"><i class="fas fa-hdd text-orange-400 mr-2"></i><strong>Disk Write:</strong> <span class="font-bold text-blue-300">${data.block_io.write_bytes}</span></p>
+                        <div class="mb-6 bg-gray-800 p-5 rounded-lg shadow-md">
+                            <h3 class="text-xl font-semibold text-cyan-400 mb-3"><i class="fas fa-info-circle mr-2"></i>Container Info:</h3>
+                            <p class="text-md text-white"><strong>ID:</strong> <span class="font-mono text-gray-300">${data.id ?? 'N/A'}</span></p>
+                            <p class="text-md text-white"><strong>Name:</strong> <span class="font-semibold text-gray-300">${data.name ?? 'N/A'}</span></p>
+                            <p class="text-md text-white"><strong>Image:</strong> <span class="font-semibold text-gray-300">${data.image ?? 'N/A'}</span></p>
+                            <p class="text-md text-white"><strong>Status:</strong> <span class="font-semibold text-gray-300">${data.status ?? 'N/A'}</span></p>
+                            <p class="text-md text-white"><strong>Uptime:</strong> <span class="font-semibold text-gray-300">${calculateUptime(data.uptime)}</span></p>
                         </div>
-
-                        <p class="text-right text-gray-500 text-sm mt-6">Last updated: ${data.timestamp}</p>
                     </div>
                 `;
             } catch (error) {
                 console.error("Failed to fetch metrics:", error);
-                hideModalLoading(DOMElements.metricsModalBody); // Hide loading state
+                hideModalLoading(DOMElements.metricsModalBody);
                 DOMElements.metricsModalBody.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-10 text-center">
                         <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
@@ -748,8 +762,9 @@
 
         function closeMetricsModal() {
             DOMElements.metricsModal.classList.add('hidden');
-            DOMElements.metricsModalBody.textContent = ''; // Clear content
+            DOMElements.metricsModalBody.innerHTML = '';
         }
+
     </script>
 </body>
 </html>
