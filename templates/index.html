@@ -317,18 +317,7 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Actions">
                             <div class="flex flex-wrap gap-3">
-                                {% if 'Up' in c.status or 'running' in c.status.lower() %}
-                                    <form action="/container/{{ c.id }}/stop" method="post" class="inline">
-                                        <button type="submit" class="action-button stop" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
-                                            <i class="fas fa-stop mr-1"></i>Stop
-                                        </button>
-                                    </form>
-                                    <form action="/container/{{ c.id }}/restart" method="post" class="inline">
-                                        <button type="submit" class="action-button restart" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
-                                            <i class="fas fa-sync-alt mr-1"></i>Restart
-                                        </button>
-                                    </form>
-                                {% elif 'Exited' in c.status %}
+                                {% if 'Exited' in c.status %}
                                     <form action="/container/{{ c.id }}/start" method="post" class="inline">
                                         <button type="submit" class="action-button start" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                             <i class="fas fa-play mr-1"></i>Start

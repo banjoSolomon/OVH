@@ -2,10 +2,10 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, f
 import docker
 from docker.errors import NotFound, APIError
 from datetime import datetime
-import humanize  # pip install humanize
+import humanize
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # Required for flash messages
+app.secret_key = 'your_secret_key_here'
 
 # Initialize Docker client globally
 try:
@@ -345,13 +345,13 @@ def get_container_metrics(container_id):
                 system_cpu_delta = cpu_stats.get('system_cpu_usage', 0) - \
                                    precpu_stats.get('system_cpu_usage', 0)
 
-                # online_cpus might not be present, fallback to number of percpu_usage or 1
+
                 online_cpus = cpu_stats.get('online_cpus',
                                             len(cpu_stats.get('cpu_usage', {}).get('percpu_usage', [])) or 1)
 
                 if system_cpu_delta > 0 and cpu_delta > 0 and online_cpus > 0:
                     cpu_percent = (cpu_delta / system_cpu_delta) * online_cpus * 100.0
-                    cpu_percentage_value = f"{round(cpu_percent, 2)}" # As a string for frontend
+                    cpu_percentage_value = f"{round(cpu_percent, 2)}"
                 else:
                     cpu_percentage_value = "0.00"
             print(f"CPU metrics processed for '{container.name}'.")
@@ -379,12 +379,12 @@ def get_container_metrics(container_id):
             memory_limit_str = 'N/A'
 
         metrics_data = {
-            **container_info, # Includes ID, Name, Image, Status, Uptime
+            **container_info,
             'network_io': network_metrics,
-            'disk_io': block_io_metrics, # Renamed key to match frontend expectation
+            'disk_io': block_io_metrics,
             'cpu_percentage': cpu_percentage_value,
             'memory_usage': memory_usage_str,
-            'memory_limit': memory_limit_str, # Explicitly include memory_limit
+            'memory_limit': memory_limit_str,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         print(f"Successfully fetched and processed metrics for '{container.name}'.")
