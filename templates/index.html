@@ -259,6 +259,9 @@
                 <button onclick="location.reload()" class="action-button px-6 py-3 rounded-2xl bg-gray-200 text-gray-700 hover:bg-gray-300">
                     <i class="fas fa-sync-alt mr-2"></i> Refresh
                 </button>
+                <button id="toggleAutoRefreshButton" class="action-button px-6 py-3 rounded-2xl bg-teal-500 text-white hover:bg-teal-600">
+                    <i class="fas fa-history mr-2"></i> Auto-Refresh: <span id="autoRefreshStatus">On</span>
+                </button>
             </div>
             <div class="relative w-full sm:w-auto">
                 <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search containers..."
@@ -333,7 +336,7 @@
                                         <i class="fas fa-trash-alt mr-1"></i>Remove
                                     </button>
                                 {% else %}
-                                    <span class="px-3 py-1 text-xs text-gray-500 bg-gray-100 rounded-lg">No actions available</span>
+                                    <span class="px-3 py-1 text-xs text-gray-500 bg-gray-100 rounded-lg">No direct actions available</span>
                                 {% endif %}
                                 <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                     <i class="fas fa-file-alt mr-1"></i>Logs
@@ -378,7 +381,8 @@
         </div>
 
         <div id="logsModal" class="modal hidden">
-            <div class="modal-content text-gray-800 logs-modal-content"> <div class="modal-header">
+            <div class="modal-content text-gray-800 logs-modal-content">
+                <div class="modal-header">
                     <h2 class="modal-title" id="logsModalTitle">Container Logs</h2>
                     <div class="flex items-center space-x-4">
                         <button onclick="copyLogsToClipboard()" class="action-button bg-gray-200 text-gray-700 hover:bg-gray-300">
@@ -429,7 +433,12 @@
             metricsModal: document.getElementById('metricsModal'),
             metricsModalTitle: document.getElementById('metricsModalTitle'),
             metricsModalBody: document.getElementById('metricsModalBody'),
+            toggleAutoRefreshButton: document.getElementById('toggleAutoRefreshButton'),
+            autoRefreshStatus: document.getElementById('autoRefreshStatus')
         };
+
+        let autoRefreshIntervalId; // To store the interval ID
+        const AUTO_REFRESH_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 
         // Function to show custom message box
         function showMessageBox(message, type = 'info') {
@@ -474,7 +483,45 @@
             DOMElements.lastRefreshedTime.textContent = now.toLocaleString('en-US', options);
         }
 
-        // Handle Flask flashed messages on DOMContentLoaded
+        // --- Auto-Refresh Logic ---
+        function startAutoRefresh() {
+            // Clear any existing interval to prevent duplicates
+            if (autoRefreshIntervalId) {
+                clearInterval(autoRefreshIntervalId);
+            }
+            autoRefreshIntervalId = setInterval(() => {
+                location.reload();
+            }, AUTO_REFRESH_DURATION);
+            DOMElements.autoRefreshStatus.textContent = 'On';
+            DOMElements.toggleAutoRefreshButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+            DOMElements.toggleAutoRefreshButton.classList.add('bg-teal-500', 'hover:bg-teal-600');
+            sessionStorage.setItem('autoRefreshEnabled', 'true');
+            console.log('Auto-refresh enabled.');
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshIntervalId) {
+                clearInterval(autoRefreshIntervalId);
+                autoRefreshIntervalId = null;
+            }
+            DOMElements.autoRefreshStatus.textContent = 'Off';
+            DOMElements.toggleAutoRefreshButton.classList.remove('bg-teal-500', 'hover:bg-teal-600');
+            DOMElements.toggleAutoRefreshButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+            sessionStorage.setItem('autoRefreshEnabled', 'false');
+            console.log('Auto-refresh disabled.');
+        }
+
+        function toggleAutoRefresh() {
+            if (autoRefreshIntervalId) {
+                stopAutoRefresh();
+                showMessageBox('Auto-refresh turned OFF.', 'info');
+            } else {
+                startAutoRefresh();
+                showMessageBox('Auto-refresh turned ON (every 5 minutes).', 'info');
+            }
+        }
+
+        // Initial setup on page load
         document.addEventListener('DOMContentLoaded', function() {
             const urlParams = new URLSearchParams(window.location.search);
             const message = urlParams.get('message');
@@ -485,12 +532,18 @@
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
-            // Set interval to refresh page every 60 seconds (1 minute)
-            setInterval(() => {
-                location.reload();
-            }, 60000);
+            // Check session storage for auto-refresh preference
+            const autoRefreshEnabled = sessionStorage.getItem('autoRefreshEnabled');
+            if (autoRefreshEnabled === 'true' || autoRefreshEnabled === null) { // Default to true if not set
+                startAutoRefresh();
+            } else {
+                stopAutoRefresh();
+            }
 
             updateLastRefreshedTime();
+
+            // Attach event listener to the toggle button
+            DOMElements.toggleAutoRefreshButton.addEventListener('click', toggleAutoRefresh);
         });
 
         // JavaScript for table search/filter
@@ -498,7 +551,7 @@
             const filter = DOMElements.searchInput.value.toLowerCase();
             const tr = DOMElements.containerTable.getElementsByTagName("tr");
 
-            for (let i = 1; i < tr.length; i++) {
+            for (let i = 1; i < tr.length; i++) { // Start from 1 to skip table header row
                 let found = false;
                 const td = tr[i].getElementsByTagName("td");
                 for (let j = 0; j < td.length; j++) {
@@ -521,7 +574,7 @@
 
         function showConfirmationModal(title, message, confirmCallback) {
             DOMElements.confirmationModal.classList.remove('hidden');
-            DOMEElements.confirmationTitle.textContent = title;
+            DOMElements.confirmationTitle.textContent = title;
             DOMElements.confirmationMessage.textContent = message;
             currentConfirmAction = confirmCallback;
             DOMElements.confirmActionButton.onclick = () => {
@@ -542,6 +595,7 @@
                 'Confirm Container Removal',
                 `Are you sure you want to remove container '${containerName}'? This action cannot be undone.`,
                 () => {
+                    // Create a temporary form and submit to trigger POST request
                     const form = document.createElement('form');
                     form.method = 'post';
                     form.action = `/container/${containerId}/remove`;
@@ -559,11 +613,13 @@
                     <span class="ml-4 text-gray-400 text-lg mt-4">${message}</span>
                 </div>
             `;
-            modalBodyElement.classList.remove('flex-row');
+            // Ensure the modal body is set up for center alignment
+            modalBodyElement.classList.remove('flex-row'); // Just in case
             modalBodyElement.classList.add('flex-col', 'items-center', 'justify-center');
         }
 
         function hideModalLoading(modalBodyElement) {
+            // Revert modal body flex properties if content dictates
             modalBodyElement.classList.remove('flex-col', 'items-center', 'justify-center');
         }
 
@@ -589,7 +645,7 @@
                     preElement.textContent = data.logs;
                     DOMElements.logsModalBody.innerHTML = ''; // Clear loading state
                     DOMElements.logsModalBody.appendChild(preElement); // Append the pre-formatted logs
-                    preElement.scrollTop = preElement.scrollHeight; // Scroll to bottom
+                    preElement.scrollTop = preElement.scrollHeight; // Scroll to bottom to show latest logs
                 } else {
                     DOMElements.logsModalBody.innerHTML = `
                         <div class="flex flex-col items-center justify-center py-10 text-center">
@@ -631,7 +687,7 @@
             }
         }
 
-        // --- Metrics Modal Functions ---
+        // --- Metrics/Details Modal Functions ---
         // Helper function to calculate uptime from ISO string
         function calculateUptime(startedAtISO) {
             if (!startedAtISO || startedAtISO === 'N/A') return 'N/A';
@@ -661,15 +717,15 @@
         }
 
         async function viewMetrics(containerId, containerName) {
-            DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
-            showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
+            DOMElements.metricsModalTitle.textContent = `Details & Metrics for ${containerName}`;
+            showModalLoading(DOMElements.metricsModalBody, 'Loading container details and metrics...');
             DOMElements.metricsModal.classList.remove('hidden');
 
             try {
-                // Fetch details and stats concurrently
+                // Fetch static details and live stats concurrently
                 const [detailsResponse, statsResponse] = await Promise.all([
-                    fetch(`/container/${containerId}/details`), // Correct endpoint for full details
-                    fetch(`/container/${containerId}/metrics`)  // Endpoint for live metrics
+                    fetch(`/container/${containerId}/details`), // This calls the /details endpoint (for static config like env vars, mounts)
+                    fetch(`/container/${containerId}/metrics`)  // This calls the /metrics endpoint (for live usage data)
                 ]);
 
                 if (!detailsResponse.ok) {
@@ -686,7 +742,7 @@
 
                 hideModalLoading(DOMElements.metricsModalBody);
 
-                // Process detailsData
+                // Process detailsData for static info
                 const created = detailsData.Created ? new Date(detailsData.Created).toLocaleString() : 'N/A';
                 const image = detailsData.Config && detailsData.Config.Image ? detailsData.Config.Image : 'N/A';
                 const status = detailsData.State && detailsData.State.Status ? detailsData.State.Status : 'N/A';
@@ -694,7 +750,7 @@
                 const uptime = calculateUptime(runningSince);
                 const restartCount = detailsData.RestartCount !== undefined ? detailsData.RestartCount : 'N/A';
 
-                // Network details
+                // Network details from detailsData
                 let networkInfoHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Network:</h3>';
                 if (detailsData.NetworkSettings && detailsData.NetworkSettings.Networks) {
                     for (const netName in detailsData.NetworkSettings.Networks) {
@@ -708,7 +764,7 @@
                 }
 
 
-                // Environment variables
+                // Environment variables from detailsData
                 let envVarsHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Environment Variables:</h3>';
                 if (detailsData.Config && detailsData.Config.Env && detailsData.Config.Env.length > 0) {
                     envVarsHtml += '<ul class="list-disc list-inside ml-4 text-lg">';
@@ -721,7 +777,7 @@
                 }
 
 
-                // Mounts (Volumes)
+                // Mounts (Volumes) from detailsData
                 let mountsHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Mounts:</h3>';
                 if (detailsData.Mounts && detailsData.Mounts.length > 0) {
                     mountsHtml += '<ul class="list-disc list-inside ml-4 text-lg">';
@@ -733,7 +789,7 @@
                     mountsHtml += '<p class="text-lg mb-1 text-gray-600">No mounts found.</p>';
                 }
 
-                // Render metrics content
+                // Render content for the metrics modal
                 DOMElements.metricsModalBody.innerHTML = `
                     <div class="p-6 bg-white rounded-xl shadow-inner text-gray-800 w-full">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 border-b pb-6 border-gray-200">
