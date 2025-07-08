@@ -102,11 +102,17 @@
             border-radius: 1.5rem;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             width: 90%;
-            max-width: 95%; /* Increased width for log view */
+            max-width: 850px; /* Default max-width for modals */
             max-height: 90vh;
             display: flex;
             flex-direction: column;
             animation: fadeInScale 0.3s ease-out;
+        }
+
+        /* Specific width for Logs Modal Content */
+        .logs-modal-content {
+            max-width: 1200px; /* Make logs modal wider */
+            width: 95%; /* Allow it to take up more screen width */
         }
 
         @keyframes fadeInOverlay {
@@ -256,7 +262,7 @@
             </div>
             <div class="relative w-full sm:w-auto">
                 <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search containers..."
-                        class="w-full pl-14 pr-6 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-lg">
+                       class="w-full pl-14 pr-6 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-lg">
                 <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl"></i>
             </div>
         </div>
@@ -297,7 +303,7 @@
                 <tbody class="bg-white divide-y divide-gray-100">
                     {% for c in containers %}
                     <tr class="
-                        {% if 'Up' in c.status or 'running' in (c.status or '').lower() %}table-row-running
+                        {% if 'Up' in c.status or 'running' in c.status.lower() %}table-row-running
                         {% elif 'Exited' in c.status %}table-row-exited
                         {% else %}table-row-other
                         {% endif %}
@@ -306,8 +312,8 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-label="Name">{{ c.name }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Image">{{ c.image_tag }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Status">
-                            <span class="status-badge {% if 'Up' in c.status or 'running' in (c.status or '').lower() %}status-badge-running{% elif 'Exited' in c.status %}status-badge-exited{% else %}status-badge-other{% endif %}">
-                                <span class="status-circle-icon {% if 'Up' in c.status or 'running' in (c.status or '').lower() %}running{% elif 'Exited' in c.status %}exited{% else %}other{% endif %}"></span>
+                            <span class="status-badge {% if 'Up' in c.status or 'running' in c.status.lower() %}status-badge-running{% elif 'Exited' in c.status %}status-badge-exited{% else %}status-badge-other{% endif %}">
+                                <span class="status-circle-icon {% if 'Up' in c.status or 'running' in c.status.lower() %}running{% elif 'Exited' in c.status %}exited{% else %}other{% endif %}"></span>
                                 {{ c.status }}
                             </span>
                         </td>
@@ -372,8 +378,7 @@
         </div>
 
         <div id="logsModal" class="modal hidden">
-            <div class="modal-content text-gray-800">
-                <div class="modal-header">
+            <div class="modal-content text-gray-800 logs-modal-content"> <div class="modal-header">
                     <h2 class="modal-title" id="logsModalTitle">Container Logs</h2>
                     <div class="flex items-center space-x-4">
                         <button onclick="copyLogsToClipboard()" class="action-button bg-gray-200 text-gray-700 hover:bg-gray-300">
@@ -480,6 +485,7 @@
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
+            // Set interval to refresh page every 60 seconds (1 minute)
             setInterval(() => {
                 location.reload();
             }, 60000);
@@ -515,7 +521,7 @@
 
         function showConfirmationModal(title, message, confirmCallback) {
             DOMElements.confirmationModal.classList.remove('hidden');
-            DOMElements.confirmationTitle.textContent = title;
+            DOMEElements.confirmationTitle.textContent = title;
             DOMElements.confirmationMessage.textContent = message;
             currentConfirmAction = confirmCallback;
             DOMElements.confirmActionButton.onclick = () => {
@@ -630,9 +636,11 @@
         function calculateUptime(startedAtISO) {
             if (!startedAtISO || startedAtISO === 'N/A') return 'N/A';
             try {
-                const startedAt = new Date(startedAtISO);
+                const startedTime = new Date(startedAtISO);
                 const now = new Date();
-                const diffMs = now - startedAt; // Difference in milliseconds
+                const diffMs = now - startedTime; // Difference in milliseconds
+
+                if (diffMs < 0) return 'N/A'; // Started in the future, unlikely
 
                 const seconds = Math.floor(diffMs / 1000);
                 const minutes = Math.floor(seconds / 60);
@@ -643,9 +651,9 @@
                 if (days > 0) uptime += `${days}d `;
                 if (hours % 24 > 0) uptime += `${hours % 24}h `;
                 if (minutes % 60 > 0) uptime += `${minutes % 60}m `;
-                if (seconds % 60 > 0) uptime += `${seconds % 60}s`;
+                if (seconds % 60 > 0 || uptime === '') uptime += `${seconds % 60}s`; // Show seconds if nothing else, or if it's the only unit
 
-                return uptime.trim() || 'Less than 1s';
+                return uptime.trim();
             } catch (e) {
                 console.error("Error calculating uptime:", e);
                 return 'N/A';
@@ -653,235 +661,142 @@
         }
 
         async function viewMetrics(containerId, containerName) {
-            DOMElements.metricsModalTitle.textContent = `Details & Metrics for ${containerName}`;
-            showModalLoading(DOMElements.metricsModalBody, 'Fetching container details and metrics...');
+            DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
+            showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
             DOMElements.metricsModal.classList.remove('hidden');
 
             try {
-                const detailsResponse = await fetch(`/container/${containerId}/details`);
+                // Fetch details and stats concurrently
+                const [detailsResponse, statsResponse] = await Promise.all([
+                    fetch(`/container/${containerId}/details`), // Correct endpoint for full details
+                    fetch(`/container/${containerId}/metrics`)  // Endpoint for live metrics
+                ]);
+
                 if (!detailsResponse.ok) {
                     const errorText = await detailsResponse.text();
                     throw new Error(`HTTP error fetching details! status: ${detailsResponse.status} - ${errorText}`);
                 }
-                const details = await detailsResponse.json();
+                if (!statsResponse.ok) {
+                    const errorText = await statsResponse.text();
+                    throw new Error(`HTTP error fetching stats! status: ${statsResponse.status} - ${errorText}`);
+                }
 
-                // Check for 'State' and 'Status' existence safely using 'and'
-                const status = (details.State && details.State.Status) ? details.State.Status.toLowerCase() : 'N/A';
-                const runningClass = (status === 'running') ? 'text-green-400' : 'text-red-400';
-                const uptime = calculateUptime(details.State?.StartedAt || 'N/A');
+                const detailsData = await detailsResponse.json();
+                const statsData = await statsResponse.json();
 
-                let portMappingsHtml = '';
-                if (details.NetworkSettings && details.NetworkSettings.Ports) {
-                    for (const port in details.NetworkSettings.Ports) {
-                        const bindings = details.NetworkSettings.Ports[port];
-                        if (bindings) {
-                            bindings.forEach(b => {
-                                portMappingsHtml += `<li class="mb-1">
-                                    <span class="font-semibold text-gray-300">Host:</span> <span class="text-white">${b.HostIp || '0.0.0.0'}:${b.HostPort}</span>
-                                    <span class="font-semibold text-gray-300 ml-4">Container:</span> <span class="text-white">${port}</span>
-                                </li>`;
-                            });
-                        } else {
-                            portMappingsHtml += `<li class="mb-1">
-                                <span class="font-semibold text-gray-300">Container:</span> <span class="text-white">${port}</span> (No host binding)
-                            </li>`;
-                        }
+                hideModalLoading(DOMElements.metricsModalBody);
+
+                // Process detailsData
+                const created = detailsData.Created ? new Date(detailsData.Created).toLocaleString() : 'N/A';
+                const image = detailsData.Config && detailsData.Config.Image ? detailsData.Config.Image : 'N/A';
+                const status = detailsData.State && detailsData.State.Status ? detailsData.State.Status : 'N/A';
+                const runningSince = detailsData.State && detailsData.State.StartedAt ? detailsData.State.StartedAt : 'N/A';
+                const uptime = calculateUptime(runningSince);
+                const restartCount = detailsData.RestartCount !== undefined ? detailsData.RestartCount : 'N/A';
+
+                // Network details
+                let networkInfoHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Network:</h3>';
+                if (detailsData.NetworkSettings && detailsData.NetworkSettings.Networks) {
+                    for (const netName in detailsData.NetworkSettings.Networks) {
+                        const net = detailsData.NetworkSettings.Networks[netName];
+                        networkInfoHtml += `
+                            <p class="text-lg mb-1"><span class="font-medium text-gray-700">${netName}:</span> IPv4: ${net.IPAddress || 'N/A'}, Gateway: ${net.Gateway || 'N/A'}</p>
+                        `;
                     }
-                }
-                if (!portMappingsHtml) {
-                    portMappingsHtml = '<li class="text-gray-400">No port mappings</li>';
-                }
-
-                // Format environment variables
-                let envVarsHtml = '';
-                if (details.Config && details.Config.Env && details.Config.Env.length > 0) {
-                    details.Config.Env.forEach(env => {
-                        envVarsHtml += `<li class="mb-1"><span class="font-mono text-white text-sm">${env}</span></li>`;
-                    });
                 } else {
-                    envVarsHtml = '<li class="text-gray-400">No environment variables set.</li>';
+                    networkInfoHtml += '<p class="text-lg mb-1 text-gray-600">No network settings found.</p>';
                 }
 
-                // Format Mounts
-                let mountsHtml = '';
-                if (details.Mounts && details.Mounts.length > 0) {
-                    details.Mounts.forEach(mount => {
-                        mountsHtml += `<li class="mb-1">
-                            <span class="font-semibold text-gray-300">Type:</span> <span class="text-white">${mount.Type}</span>
-                            <span class="font-semibold text-gray-300 ml-4">Source:</span> <span class="text-white">${mount.Source}</span>
-                            <span class="font-semibold text-gray-300 ml-4">Destination:</span> <span class="text-white">${mount.Destination}</span>
-                            <span class="font-semibold text-gray-300 ml-4">Mode:</span> <span class="text-white">${mount.Mode}</span>
-                        </li>`;
+
+                // Environment variables
+                let envVarsHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Environment Variables:</h3>';
+                if (detailsData.Config && detailsData.Config.Env && detailsData.Config.Env.length > 0) {
+                    envVarsHtml += '<ul class="list-disc list-inside ml-4 text-lg">';
+                    detailsData.Config.Env.forEach(env => {
+                        envVarsHtml += `<li>${env}</li>`;
                     });
+                    envVarsHtml += '</ul>';
                 } else {
-                    mountsHtml = '<li class="text-gray-400">No mounts.</li>';
+                    envVarsHtml += '<p class="text-lg mb-1 text-gray-600">No environment variables found.</p>';
                 }
 
+
+                // Mounts (Volumes)
+                let mountsHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Mounts:</h3>';
+                if (detailsData.Mounts && detailsData.Mounts.length > 0) {
+                    mountsHtml += '<ul class="list-disc list-inside ml-4 text-lg">';
+                    detailsData.Mounts.forEach(mount => {
+                        mountsHtml += `<li>Type: ${mount.Type}, Source: ${mount.Source}, Destination: ${mount.Destination}, Mode: ${mount.Mode || 'rw'}</li>`;
+                    });
+                    mountsHtml += '</ul>';
+                } else {
+                    mountsHtml += '<p class="text-lg mb-1 text-gray-600">No mounts found.</p>';
+                }
+
+                // Render metrics content
                 DOMElements.metricsModalBody.innerHTML = `
-                    <div class="p-6 bg-gray-800 rounded-lg shadow-inner w-full">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                            <div class="col-span-full pb-4 mb-4 border-b border-gray-700">
-                                <h3 class="text-2xl font-bold text-white mb-2">Basic Information</h3>
-                            </div>
-                            <div>
-                                <p class="text-gray-400 text-sm font-semibold mb-1">ID:</p>
-                                <p class="text-lg text-white font-mono break-all mb-4">${details.Id}</p>
+                    <div class="p-6 bg-white rounded-xl shadow-inner text-gray-800 w-full">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 border-b pb-6 border-gray-200">
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Name:</span> ${detailsData.Name ? detailsData.Name.substring(1) : 'N/A'}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">ID:</span> ${containerId}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Image:</span> ${image}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Status:</span> ${status}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Created:</span> ${created}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Uptime:</span> ${uptime}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Restart Count:</span> ${restartCount}</p></div>
+                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Platform:</span> ${detailsData.Platform || 'N/A'}</p></div>
+                        </div>
 
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Name:</p>
-                                <p class="text-lg text-white mb-4">${details.Name.substring(1)}</p>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-800">Live Resource Usage:</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                            <div class="bg-blue-50 p-5 rounded-lg shadow-sm">
+                                <p class="text-sm font-medium text-blue-700">CPU Usage</p>
+                                <p class="text-3xl font-bold text-blue-900 mt-1">${statsData.cpu_percent.toFixed(2)}%</p>
+                            </div>
+                            <div class="bg-purple-50 p-5 rounded-lg shadow-sm">
+                                <p class="text-sm font-medium text-purple-700">Memory Usage</p>
+                                <p class="text-3xl font-bold text-purple-900 mt-1">${statsData.memory_usage.toFixed(2)} MB / ${statsData.memory_limit.toFixed(2)} MB</p>
+                                <p class="text-xs text-purple-600 mt-1">(${statsData.memory_percent.toFixed(2)}%)</p>
+                            </div>
+                            <div class="bg-green-50 p-5 rounded-lg shadow-sm">
+                                <p class="text-sm font-medium text-green-700">Network I/O</p>
+                                <p class="text-xl font-bold text-green-900 mt-1">${statsData.net_io_rx.toFixed(2)} MB (Rx) / ${statsData.net_io_tx.toFixed(2)} MB (Tx)</p>
+                            </div>
+                            <div class="bg-yellow-50 p-5 rounded-lg shadow-sm">
+                                <p class="text-sm font-medium text-yellow-700">Block I/O</p>
+                                <p class="text-xl font-bold text-yellow-900 mt-1">${statsData.block_io_read.toFixed(2)} MB (Read) / ${statsData.block_io_write.toFixed(2)} MB (Write)</p>
+                            </div>
+                        </div>
 
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Image:</p>
-                                <p class="text-lg text-white break-all mb-4">${details.Config?.Image || 'N/A'}</p>
+                        <div class="mb-6">
+                            ${networkInfoHtml}
+                        </div>
 
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Status:</p>
-                                <p class="text-lg font-bold ${runningClass} mb-4">${details.State?.Status || 'N/A'}</p>
+                        <div class="mb-6">
+                            ${envVarsHtml}
+                        </div>
 
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Uptime:</p>
-                                <p class="text-lg text-white mb-4">${uptime}</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Created:</p>
-                                <p class="text-lg text-white mb-4">${new Date(details.Created).toLocaleString()}</p>
-
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Platform:</p>
-                                <p class="text-lg text-white mb-4">${details.Platform || 'N/A'}</p>
-
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Command:</p>
-                                <pre class="text-lg text-white bg-gray-700 p-3 rounded-md overflow-x-auto font-mono text-sm mb-4">${details.Config?.Cmd?.join(' ') || 'N/A'}</pre>
-
-                                <p class="text-gray-400 text-sm font-semibold mb-1">Healthcheck (if any):</p>
-                                <p class="text-lg text-white mb-4">${details.State?.Health?.Status || 'N/A'}</p>
-                            </div>
-
-                            <div class="col-span-full pb-4 mb-4 border-b border-gray-700 mt-6">
-                                <h3 class="text-2xl font-bold text-white mb-2">Network & Ports</h3>
-                            </div>
-                            <div class="col-span-full">
-                                <p class="text-gray-400 text-sm font-semibold mb-2">Port Mappings:</p>
-                                <ul class="list-disc pl-5">
-                                    ${portMappingsHtml}
-                                </ul>
-                            </div>
-                            <div class="col-span-full">
-                                <p class="text-gray-400 text-sm font-semibold mb-2 mt-4">IP Address (Bridge Network):</p>
-                                <p class="text-lg text-white font-mono">${details.NetworkSettings?.Networks?.bridge?.IPAddress || 'N/A'}</p>
-                            </div>
-
-                            <div class="col-span-full pb-4 mb-4 border-b border-gray-700 mt-6">
-                                <h3 class="text-2xl font-bold text-white mb-2">Configuration</h3>
-                            </div>
-                            <div class="col-span-full">
-                                <p class="text-gray-400 text-sm font-semibold mb-2">Environment Variables:</p>
-                                <ul class="list-disc pl-5">
-                                    ${envVarsHtml}
-                                </ul>
-                            </div>
-                            <div class="col-span-full">
-                                <p class="text-gray-400 text-sm font-semibold mb-2 mt-4">Mounts:</p>
-                                <ul class="list-disc pl-5">
-                                    ${mountsHtml}
-                                </ul>
-                            </div>
-
-                            <div class="col-span-full pb-4 mb-4 border-b border-gray-700 mt-6">
-                                <h3 class="text-2xl font-bold text-white mb-2">Resource Usage (Live Metrics)</h3>
-                            </div>
-                            <div class="col-span-full">
-                                <div id="liveMetricsDisplay">
-                                    <p class="text-gray-400 text-lg">Fetching live metrics...</p>
-                                    <div class="spinner my-4 mx-auto"></div>
-                                </div>
-                            </div>
+                        <div class="mb-6">
+                            ${mountsHtml}
                         </div>
                     </div>
                 `;
-                // Start fetching live metrics
-                fetchLiveMetrics(containerId);
-
             } catch (error) {
-                console.error("Failed to fetch details/metrics:", error);
+                console.error("Failed to fetch metrics:", error);
                 hideModalLoading(DOMElements.metricsModalBody);
                 DOMElements.metricsModalBody.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-10 text-center">
                         <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
-                        <span class="text-red-400 text-lg">Failed to load details and metrics: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
+                        <span class="text-red-400 text-lg">Failed to load metrics: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
                     </div>
                 `;
-                showMessageBox(`Failed to load details for ${containerName}.`, 'error');
+                showMessageBox(`Failed to load metrics for ${containerName}.`, 'error');
             }
         }
-
-        let metricsInterval = null; // To store the interval ID
-
-        async function fetchLiveMetrics(containerId) {
-            // Clear any existing interval to prevent multiple fetches
-            if (metricsInterval) {
-                clearInterval(metricsInterval);
-            }
-
-            const updateMetrics = async () => {
-                try {
-                    const metricsResponse = await fetch(`/container/${containerId}/stats`);
-                    if (!metricsResponse.ok) {
-                        const errorText = await metricsResponse.text();
-                        throw new Error(`HTTP error fetching stats! status: ${metricsResponse.status} - ${errorText}`);
-                    }
-                    const metrics = await metricsResponse.json();
-
-                    const liveMetricsDisplay = document.getElementById('liveMetricsDisplay');
-                    if (liveMetricsDisplay) {
-                        liveMetricsDisplay.innerHTML = `
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-white">
-                                <div class="bg-gray-700 p-5 rounded-lg shadow-lg">
-                                    <p class="text-gray-300 text-sm font-semibold mb-1">CPU Usage:</p>
-                                    <p class="text-2xl font-bold text-blue-400">${(metrics.cpu_percent || 0).toFixed(2)}%</p>
-                                </div>
-                                <div class="bg-gray-700 p-5 rounded-lg shadow-lg">
-                                    <p class="text-gray-300 text-sm font-semibold mb-1">Memory Usage:</p>
-                                    <p class="text-2xl font-bold text-purple-400">${(metrics.memory_usage || 0).toFixed(2)}MB / ${(metrics.memory_limit || 0).toFixed(2)}MB</p>
-                                </div>
-                                <div class="bg-gray-700 p-5 rounded-lg shadow-lg">
-                                    <p class="text-gray-300 text-sm font-semibold mb-1">Memory %:</p>
-                                    <p class="text-2xl font-bold text-pink-400">${(metrics.memory_percent || 0).toFixed(2)}%</p>
-                                </div>
-                                <div class="bg-gray-700 p-5 rounded-lg shadow-lg">
-                                    <p class="text-gray-300 text-sm font-semibold mb-1">Network I/O:</p>
-                                    <p class="text-2xl font-bold text-teal-400">${(metrics.net_io_rx || 0).toFixed(2)}MB / ${(metrics.net_io_tx || 0).toFixed(2)}MB</p>
-                                </div>
-                                <div class="bg-gray-700 p-5 rounded-lg shadow-lg">
-                                    <p class="text-gray-300 text-sm font-semibold mb-1">Block I/O:</p>
-                                    <p class="text-2xl font-bold text-orange-400">${(metrics.block_io_read || 0).toFixed(2)}MB / ${(metrics.block_io_write || 0).toFixed(2)}MB</p>
-                                </div>
-                            </div>
-                        `;
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch live metrics:", error);
-                    const liveMetricsDisplay = document.getElementById('liveMetricsDisplay');
-                    if (liveMetricsDisplay) {
-                        liveMetricsDisplay.innerHTML = `
-                            <div class="text-center text-red-400 text-lg mt-4">
-                                <i class="fas fa-exclamation-triangle mr-2"></i>Could not load live metrics. Container might be stopped or Docker API is unreachable.
-                            </div>
-                        `;
-                    }
-                    clearInterval(metricsInterval); // Stop trying to fetch if there's an error
-                }
-            };
-
-            // Fetch immediately and then set interval
-            await updateMetrics();
-            metricsInterval = setInterval(updateMetrics, 5000); // Update every 5 seconds
-        }
-
 
         function closeMetricsModal() {
             DOMElements.metricsModal.classList.add('hidden');
             DOMElements.metricsModalBody.innerHTML = ''; // Clear content when closing
-            if (metricsInterval) { // Clear the interval when modal is closed
-                clearInterval(metricsInterval);
-                metricsInterval = null;
-            }
         }
     </script>
 </body>

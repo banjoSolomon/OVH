@@ -5,7 +5,7 @@ from datetime import datetime
 import humanize
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'
+app.secret_key = 'your_secret_key_here' # Replace with a strong, random secret key!
 
 # Initialize Docker client globally
 try:
@@ -28,7 +28,7 @@ def format_size(size_bytes):
 
 
 def get_container_details(container):
-    """Extracts comprehensive details for a given container object."""
+    """Extracts comprehensive details for a given container object for the table view."""
     details = {
         'id': container.id,
         'short_id': container.short_id,
@@ -61,10 +61,6 @@ def get_container_details(container):
     if container.attrs and 'Created' in container.attrs:
         try:
             created_iso = container.attrs['Created']
-            # Python's datetime.fromisoformat can handle 'Z' with tzinfo.
-            # However, if we want a simple local datetime string, it's often easier to strip 'Z' and just parse.
-            # Or, better, handle timezone-aware parsing. For simplicity here, we'll keep the previous approach
-            # of stripping Z and letting fromisoformat handle the offset correctly if present.
             created_dt = datetime.fromisoformat(created_iso.replace('Z', '+00:00'))
             details['created_at'] = created_dt.strftime('%Y-%m-%d %H:%M:%S')
         except ValueError:
@@ -72,23 +68,19 @@ def get_container_details(container):
 
     # Size: Note that 'SizeRw' and 'SizeRootFs' are often only populated when
     # containers.list(size=True) or container.inspect() is called.
-    # For a general list view, it's common for this to be 'N/A' unless explicit API calls are made.
-    # To get size, we would ideally need `container.reload()` or fetch with `client.containers.list(all=True, size=True)`
-    # which can impact performance for large numbers of containers.
-    # For the scope of this UI, if these aren't consistently populated, 'N/A' is an acceptable fallback.
     if 'SizeRw' in container.attrs and 'SizeRootFs' in container.attrs:
         total_size = container.attrs['SizeRw'] + container.attrs['SizeRootFs']
         details['size'] = format_size(total_size)
     elif 'SizeRw' in container.attrs:
         details['size'] = format_size(container.attrs['SizeRw'])
     else:
-        details['size'] = 'N/A'  # Default to N/A if size info isn't directly in `container.attrs`
+        details['size'] = 'N/A'
 
     return details
 
 
-def get_container_stats():
-    """Gets counts of running, exited, and total containers."""
+def get_container_stats_summary():
+    """Gets counts of running, exited, and total containers for dashboard cards."""
     if not DOCKER_CLIENT_READY:
         return 0, 0, 0
 
@@ -102,12 +94,12 @@ def get_container_stats():
         print(f"Dashboard Stats: Running={running_count}, Exited={exited_count}, Total={total_count}")
         return running_count, exited_count, total_count
     except APIError as e:
-        print(f"Docker API error in get_container_stats: {e}")
-        flash(f"Error fetching dashboard statistics: {e}", "error")  # Flash error
+        print(f"Docker API error in get_container_stats_summary: {e}")
+        flash(f"Error fetching dashboard statistics: {e}", "error")
         return 0, 0, 0
     except Exception as e:
-        print(f"An unexpected error occurred in get_container_stats: {e}")
-        flash(f"An unexpected error occurred while fetching dashboard statistics: {e}", "error")  # Flash error
+        print(f"An unexpected error occurred in get_container_stats_summary: {e}")
+        flash(f"An unexpected error occurred while fetching dashboard statistics: {e}", "error")
         return 0, 0, 0
 
 
@@ -130,21 +122,17 @@ def index():
             total_count=0
         )
 
-    filter_type = request.args.get("filter", "all")  # Default to 'all' for a broader initial view
+    filter_type = request.args.get("filter", "all")
     container_list = []
 
     try:
-        # Docker SDK's filters parameter expects a dictionary of lists for statuses
         if filter_type == "running":
             raw_containers = client.containers.list(filters={'status': ['running']})
         elif filter_type == "exited":
             raw_containers = client.containers.list(filters={'status': ['exited']})
         elif filter_type == "all":
             raw_containers = client.containers.list(all=True)
-        # Add other filters if you implement them (e.g., 'paused', 'restarting')
-        # elif filter_type == "paused":
-        #     raw_containers = client.containers.list(filters={'status': ['paused']})
-        else:  # Fallback for invalid filter type
+        else:
             flash(f"Invalid filter type '{filter_type}'. Displaying all containers.", "warning")
             raw_containers = client.containers.list(all=True)
             filter_type = "all"
@@ -159,7 +147,7 @@ def index():
         flash(f"An unexpected error occurred while listing containers: {e}", "error")
         print(f"An unexpected error occurred: {e}")
 
-    running_count, exited_count, total_count = get_container_stats()
+    running_count, exited_count, total_count = get_container_stats_summary()
 
     return render_template(
         "index.html",
@@ -225,12 +213,11 @@ def remove_container(container_id):
         return flash_message_and_redirect("Docker client not ready. Cannot remove container.", "error")
     try:
         container = client.containers.get(container_id)
-        # Only allow removal if exited, or if force is true (not implemented in UI for now)
         if container.status == 'exited':
             container.remove()
             return flash_message_and_redirect(f"Container '{container.name}' removed successfully.", "success")
         else:
-            flash_message_and_redirect(
+            return flash_message_and_redirect(
                 f"Container '{container.name}' is currently '{container.status}'. Please stop it first before removing.",
                 "warning")
     except NotFound:
@@ -250,7 +237,6 @@ def get_container_logs(container_id):
     try:
         container = client.containers.get(container_id)
         print(f"Found container '{container.name}' ({container.id}). Fetching logs...")
-        # Fetch logs, decode them, and limit to last 1000 lines for performance
         logs = container.logs(tail=1000).decode('utf-8')
         print(f"Successfully fetched logs for '{container.name}'.")
         return jsonify({"logs": logs})
@@ -265,6 +251,28 @@ def get_container_logs(container_id):
         return jsonify({"logs": f"An unexpected error occurred while fetching logs: {e}"}), 500
 
 
+# NEW ROUTE: For full container details (attrs) - static configuration and metadata
+@app.route("/container/<string:container_id>/details", methods=["GET"])
+def get_container_full_details(container_id):
+    print(f"Received request for full details for container ID: {container_id}")
+    if not DOCKER_CLIENT_READY:
+        return jsonify({"error": "Docker client not ready."}), 500
+    try:
+        container = client.containers.get(container_id)
+        details = container.attrs # This contains all the low-level details
+        print(f"Successfully fetched full details for '{container.name}'.")
+        return jsonify(details)
+    except NotFound:
+        print(f"Container with ID '{container_id}' not found. Returning 404.")
+        return jsonify({"error": "Container not found"}), 404
+    except APIError as e:
+        print(f"Docker API error fetching full details for '{container_id}': {e}. Returning 500.")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        print(f"An unexpected error occurred while fetching full details for '{container_id}': {e}. Returning 500.")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/container/<container_id>/metrics", methods=["GET"])
 def get_container_metrics(container_id):
     print(f"Received request for metrics for container ID: {container_id}")
@@ -275,67 +283,29 @@ def get_container_metrics(container_id):
         container = client.containers.get(container_id)
         print(f"Found container '{container.name}' ({container.id}). Attempting to fetch stats...")
 
-        # --- Extract basic container info here ---
-        # Uptime will be the 'StartedAt' timestamp; calculate human-readable in JS
-        container_info = {
-            'id': container.short_id,  # Use short ID for display
-            'name': container.name,
-            'image': container.image.tags[0] if container.image.tags else 'untagged',
-            'status': container.status,
-            'uptime': container.attrs['State']['StartedAt'] # ISO format string
-        }
-        # ----------------------------------------
-
         stats_data = container.stats(stream=False)  # stream=False gets current stats immediately
 
         if not stats_data:
             print(
                 f"No stats data available for container '{container.name}' ({container_id}). It might be too new or not generating stats yet.")
-            # Still return container info even if no stats data
             return jsonify({
-                "error": f"No metrics data available for container '{container.name}'.",
-                **container_info  # Include basic info
+                "error": f"No metrics data available for container '{container.name}'."
             }), 500
 
         print(f"Successfully received raw stats data for '{container.name}'.")
 
-        network_metrics = {}
-        try:
-            if 'networks' in stats_data:
-                for net_name, net_data in stats_data['networks'].items():
-                    network_metrics[net_name] = {
-                        'rx_bytes': format_size(net_data.get('rx_bytes', 0)),  # Default to 0 for missing keys
-                        'tx_bytes': format_size(net_data.get('tx_bytes', 0))
-                    }
-            print(f"Network metrics processed for '{container.name}'.")
-        except Exception as e:
-            print(f"Error processing network metrics for '{container_id}': {e}")
-            network_metrics = {'error': f'Failed to process network data: {e}'}
+        # Initialize default values
+        cpu_percentage_value = 0.0
+        memory_usage_mb = 0.0
+        memory_limit_mb = 0.0
+        memory_percentage_value = 0.0
+        net_io_rx_mb = 0.0
+        net_io_tx_mb = 0.0
+        block_io_read_mb = 0.0
+        block_io_write_mb = 0.0
 
-        block_io_metrics = {
-            'read_bytes': 'N/A',
-            'write_bytes': 'N/A'
-        }
-        try:
-            if 'blkio_stats' in stats_data and 'io_service_bytes_recursive' in stats_data['blkio_stats']:
-                read_bytes_total = 0
-                write_bytes_total = 0
-                for entry in stats_data['blkio_stats']['io_service_bytes_recursive']:
-                    if entry['op'] == 'Read':
-                        read_bytes_total += entry['value']
-                    elif entry['op'] == 'Write':
-                        write_bytes_total += entry['value']
-                block_io_metrics['read_bytes'] = format_size(read_bytes_total)
-                block_io_metrics['write_bytes'] = format_size(write_bytes_total)
-            print(f"Block I/O metrics processed for '{container.name}'.")
-        except Exception as e:
-            print(f"Error processing block I/O metrics for '{container_id}': {e}")
-            block_io_metrics = {'error': f'Failed to process block I/O data: {e}'}
-
-        cpu_percentage_value = 'N/A'
         try:
             # CPU usage calculation based on Docker's formula:
-            # ((cpu_delta / system_cpu_delta) * number_of_cpus) * 100.0
             cpu_stats = stats_data.get('cpu_stats', {})
             precpu_stats = stats_data.get('precpu_stats', {})
 
@@ -345,46 +315,68 @@ def get_container_metrics(container_id):
                 system_cpu_delta = cpu_stats.get('system_cpu_usage', 0) - \
                                    precpu_stats.get('system_cpu_usage', 0)
 
-
                 online_cpus = cpu_stats.get('online_cpus',
                                             len(cpu_stats.get('cpu_usage', {}).get('percpu_usage', [])) or 1)
 
                 if system_cpu_delta > 0 and cpu_delta > 0 and online_cpus > 0:
                     cpu_percent = (cpu_delta / system_cpu_delta) * online_cpus * 100.0
-                    cpu_percentage_value = f"{round(cpu_percent, 2)}"
-                else:
-                    cpu_percentage_value = "0.00"
+                    cpu_percentage_value = round(cpu_percent, 2)
             print(f"CPU metrics processed for '{container.name}'.")
         except Exception as e:
             print(f"Error processing CPU metrics for '{container_id}': {e}")
-            cpu_percentage_value = f'Failed to process CPU data: {e}'
 
-        memory_usage_str = 'N/A'
-        memory_limit_str = 'N/A'
         try:
             memory_stats = stats_data.get('memory_stats', {})
             if 'usage' in memory_stats and 'limit' in memory_stats:
-                mem_usage = memory_stats['usage']
-                mem_limit = memory_stats['limit']
-                if mem_limit > 0:
-                    memory_usage_str = f"{format_size(mem_usage)} / {format_size(mem_limit)} ({round((mem_usage / mem_limit) * 100, 2)}%)"
-                    memory_limit_str = format_size(mem_limit)
-                else:
-                    memory_usage_str = f"{format_size(mem_usage)} / Unlimited"
-                    memory_limit_str = "Unlimited"
+                mem_usage_bytes = memory_stats['usage']
+                mem_limit_bytes = memory_stats['limit']
+
+                memory_usage_mb = round(mem_usage_bytes / (1024 * 1024), 2)
+                memory_limit_mb = round(mem_limit_bytes / (1024 * 1024), 2)
+
+                if mem_limit_bytes > 0:
+                    memory_percentage_value = round((mem_usage_bytes / mem_limit_bytes) * 100, 2)
             print(f"Memory metrics processed for '{container.name}'.")
         except Exception as e:
             print(f"Error processing memory metrics for '{container_id}': {e}")
-            memory_usage_str = f'Failed to process Memory data: {e}'
-            memory_limit_str = 'N/A'
+
+        try:
+            if 'networks' in stats_data:
+                rx_bytes_total = 0
+                tx_bytes_total = 0
+                for net_data in stats_data['networks'].values():
+                    rx_bytes_total += net_data.get('rx_bytes', 0)
+                    tx_bytes_total += net_data.get('tx_bytes', 0)
+                net_io_rx_mb = round(rx_bytes_total / (1024 * 1024), 2)
+                net_io_tx_mb = round(tx_bytes_total / (1024 * 1024), 2)
+            print(f"Network metrics processed for '{container.name}'.")
+        except Exception as e:
+            print(f"Error processing network metrics for '{container_id}': {e}")
+
+        try:
+            if 'blkio_stats' in stats_data and 'io_service_bytes_recursive' in stats_data['blkio_stats']:
+                read_bytes_total = 0
+                write_bytes_total = 0
+                for entry in stats_data['blkio_stats']['io_service_bytes_recursive']:
+                    if entry['op'] == 'Read':
+                        read_bytes_total += entry['value']
+                    elif entry['op'] == 'Write':
+                        write_bytes_total += entry['value']
+                block_io_read_mb = round(read_bytes_total / (1024 * 1024), 2)
+                block_io_write_mb = round(write_bytes_total / (1024 * 1024), 2)
+            print(f"Block I/O metrics processed for '{container.name}'.")
+        except Exception as e:
+            print(f"Error processing block I/O metrics for '{container_id}': {e}")
 
         metrics_data = {
-            **container_info,
-            'network_io': network_metrics,
-            'disk_io': block_io_metrics,
-            'cpu_percentage': cpu_percentage_value,
-            'memory_usage': memory_usage_str,
-            'memory_limit': memory_limit_str,
+            'cpu_percent': cpu_percentage_value,
+            'memory_usage': memory_usage_mb,
+            'memory_limit': memory_limit_mb,
+            'memory_percent': memory_percentage_value,
+            'net_io_rx': net_io_rx_mb,
+            'net_io_tx': net_io_tx_mb,
+            'block_io_read': block_io_read_mb,
+            'block_io_write': block_io_write_mb,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         print(f"Successfully fetched and processed metrics for '{container.name}'.")
