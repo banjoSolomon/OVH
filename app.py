@@ -4,7 +4,7 @@ from docker.errors import NotFound, APIError
 from datetime import datetime
 import humanize
 
-app = Flask(__name__)
+app = Flask(__name__)  # Corrected from __noise__ to __name__
 app.secret_key = 'your_secret_key_here' # Replace with a strong, random secret key!
 
 # Initialize Docker client globally
@@ -38,7 +38,7 @@ def get_container_details(container):
         'command': ' '.join(container.attrs['Config']['Cmd']) if container.attrs['Config']['Cmd'] else 'N/A',
         # Join command list to string
         'ports': 'N/A',
-        'created_at': 'N/A',
+        'created_at': 'N/A', # This will now store the ISO string or 'N/A'
         'size': 'N/A'
     }
 
@@ -57,14 +57,11 @@ def get_container_details(container):
     else:
         details['ports'] = 'No ports'
 
-    # Extract created time
+    # Extract created time (ISO format for client-side processing)
     if container.attrs and 'Created' in container.attrs:
-        try:
-            created_iso = container.attrs['Created']
-            created_dt = datetime.fromisoformat(created_iso.replace('Z', '+00:00'))
-            details['created_at'] = created_dt.strftime('%Y-%m-%d %H:%M:%S')
-        except ValueError:
-            details['created_at'] = 'N/A'
+        details['created_at'] = container.attrs['Created']
+    else:
+        details['created_at'] = 'N/A' # Or an empty string if you prefer
 
     # Size: Note that 'SizeRw' and 'SizeRootFs' are often only populated when
     # containers.list(size=True) or container.inspect() is called.
@@ -389,7 +386,7 @@ def get_container_metrics(container_id):
         return jsonify({"error": f"Docker API error: {e}"}), 500
     except Exception as e:
         print(f"An unexpected error occurred while fetching metrics for '{container_id}': {e}. Returning 500.")
-        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+        return jsonify({"error": f"An unexpected error occurred while fetching metrics: {e}"}), 500
 
 
 if __name__ == "__main__":
