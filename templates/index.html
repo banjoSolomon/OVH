@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -321,23 +322,13 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Ports">{{ c.ports }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Created">{{ c.created_at }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 created-at-cell" data-label="Created" data-timestamp="{{ c.created_at }}">
+                            {{ c.created_at }} {# Fallback if JS fails, or for initial load #}
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Size">{{ c.size }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Actions">
                             <div class="flex flex-wrap gap-3">
-                                {% if 'Exited' in c.status %}
-                                    <form action="/container/{{ c.id }}/start" method="post" class="inline">
-                                        <button type="submit" class="action-button start" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
-                                            <i class="fas fa-play mr-1"></i>Start
-                                        </button>
-                                    </form>
-                                    <button type="button" onclick="confirmRemove('{{ c.id }}', '{{ c.name }}')" class="action-button remove" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
-                                        <i class="fas fa-trash-alt mr-1"></i>Remove
-                                    </button>
-                                {% else %}
-                                    <span class="px-3 py-1 text-xs text-gray-500 bg-gray-100 rounded-lg">No direct actions available</span>
-                                {% endif %}
                                 <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
                                     <i class="fas fa-file-alt mr-1"></i>Logs
                                 </button>
@@ -483,6 +474,18 @@
             DOMElements.lastRefreshedTime.textContent = now.toLocaleString('en-US', options);
         }
 
+        // Function to format "Created" timestamps
+        function formatCreatedTimestamps() {
+            const createdCells = document.querySelectorAll('.created-at-cell');
+            createdCells.forEach(cell => {
+                const timestamp = cell.dataset.timestamp;
+                if (timestamp && timestamp !== 'N/A') {
+                    cell.textContent = moment(timestamp).fromNow();
+                }
+            });
+        }
+
+
         // --- Auto-Refresh Logic ---
         function startAutoRefresh() {
             // Clear any existing interval to prevent duplicates
@@ -541,6 +544,7 @@
             }
 
             updateLastRefreshedTime();
+            formatCreatedTimestamps(); // Call this on DOMContentLoaded
 
             // Attach event listener to the toggle button
             DOMElements.toggleAutoRefreshButton.addEventListener('click', toggleAutoRefresh);
@@ -555,8 +559,12 @@
                 let found = false;
                 const td = tr[i].getElementsByTagName("td");
                 for (let j = 0; j < td.length; j++) {
+                    // Check against both original and formatted text content
                     const cellText = td[j].textContent || td[j].innerText;
-                    if (cellText.toLowerCase().indexOf(filter) > -1) {
+                    const originalTimestamp = td[j].dataset.timestamp; // Get original timestamp if available
+
+                    if (cellText.toLowerCase().indexOf(filter) > -1 ||
+                        (originalTimestamp && originalTimestamp.toLowerCase().indexOf(filter) > -1)) {
                         found = true;
                         break;
                     }
@@ -574,7 +582,7 @@
 
         function showConfirmationModal(title, message, confirmCallback) {
             DOMElements.confirmationModal.classList.remove('hidden');
-            DOMElements.confirmationTitle.textContent = title;
+            DOMEElements.confirmationTitle.textContent = title;
             DOMElements.confirmationMessage.textContent = message;
             currentConfirmAction = confirmCallback;
             DOMElements.confirmActionButton.onclick = () => {
@@ -588,21 +596,6 @@
         function closeConfirmationModal() {
             DOMElements.confirmationModal.classList.add('hidden');
             currentConfirmAction = null;
-        }
-
-        function confirmRemove(containerId, containerName) {
-            showConfirmationModal(
-                'Confirm Container Removal',
-                `Are you sure you want to remove container '${containerName}'? This action cannot be undone.`,
-                () => {
-                    // Create a temporary form and submit to trigger POST request
-                    const form = document.createElement('form');
-                    form.method = 'post';
-                    form.action = `/container/${containerId}/remove`;
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            );
         }
 
         // --- Generic Modal Loading State Functions ---
@@ -631,228 +624,123 @@
 
             try {
                 const response = await fetch(`/container/${containerId}/logs`);
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-                }
                 const data = await response.json();
 
-                hideModalLoading(DOMElements.logsModalBody);
-                if (data.logs) {
-                    // Create a <pre> tag to preserve whitespace and add the log-content class
-                    const preElement = document.createElement('pre');
-                    preElement.classList.add('log-content'); // Apply new log styling
-                    preElement.textContent = data.logs;
-                    DOMElements.logsModalBody.innerHTML = ''; // Clear loading state
-                    DOMElements.logsModalBody.appendChild(preElement); // Append the pre-formatted logs
-                    preElement.scrollTop = preElement.scrollHeight; // Scroll to bottom to show latest logs
+                if (response.ok) {
+                    DOMElements.logsModalBody.innerHTML = `<pre class="log-content">${data.logs || 'No logs available.'}</pre>`;
                 } else {
-                    DOMElements.logsModalBody.innerHTML = `
-                        <div class="flex flex-col items-center justify-center py-10 text-center">
-                            <i class="fas fa-info-circle text-gray-500 text-5xl mb-4"></i>
-                            <span class="text-gray-400 text-lg">No logs available or an error occurred.</span>
-                        </div>
-                    `;
+                    DOMElements.logsModalBody.innerHTML = `<p class="text-red-500 p-4">${data.logs || 'Failed to load logs.'}</p>`;
+                    showMessageBox(`Error loading logs: ${data.logs}`, 'error');
                 }
             } catch (error) {
-                console.error("Failed to fetch logs:", error);
+                console.error('Error fetching logs:', error);
+                DOMElements.logsModalBody.innerHTML = `<p class="text-red-500 p-4">An error occurred: ${error.message}</p>`;
+                showMessageBox(`An unexpected error occurred while fetching logs: ${error.message}`, 'error');
+            } finally {
                 hideModalLoading(DOMElements.logsModalBody);
-                DOMElements.logsModalBody.innerHTML = `
-                    <div class="flex flex-col items-center justify-center py-10 text-center">
-                        <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
-                        <span class="text-red-400 text-lg">Failed to load logs: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
-                    </div>
-                `;
-                showMessageBox(`Failed to load logs for ${containerName}.`, 'error');
+                DOMElements.logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Ensure flex is removed
             }
         }
 
         function closeLogsModal() {
             DOMElements.logsModal.classList.add('hidden');
-            DOMElements.logsModalBody.innerHTML = ''; // Clear content when closing
+            DOMElements.logsModalBody.innerHTML = ''; // Clear content
         }
 
         function copyLogsToClipboard() {
-            // Get the text content from the <pre> tag within the logsModalBody
-            const logsText = DOMElements.logsModalBody.querySelector('.log-content')?.textContent || '';
-            if (logsText) {
-                navigator.clipboard.writeText(logsText).then(() => {
-                    showMessageBox('Logs copied to clipboard!', 'success');
-                }).catch(err => {
-                    console.error('Failed to copy logs: ', err);
-                    showMessageBox('Failed to copy logs.', 'error');
-                });
-            } else {
-                showMessageBox('No logs to copy.', 'warning');
+            const logContentElement = DOMElements.logsModalBody.querySelector('.log-content');
+            if (logContentElement) {
+                navigator.clipboard.writeText(logContentElement.textContent)
+                    .then(() => showMessageBox('Logs copied to clipboard!', 'success'))
+                    .catch(err => showMessageBox('Failed to copy logs.', 'error'));
             }
         }
 
-        // --- Metrics/Details Modal Functions ---
-        // Helper function to calculate uptime from ISO string
-        function calculateUptime(startedAtISO) {
-            if (!startedAtISO || startedAtISO === 'N/A') return 'N/A';
-            try {
-                const startedTime = new Date(startedAtISO);
-                const now = new Date();
-                const diffMs = now - startedTime; // Difference in milliseconds
-
-                if (diffMs < 0) return 'N/A'; // Started in the future, unlikely
-
-                const seconds = Math.floor(diffMs / 1000);
-                const minutes = Math.floor(seconds / 60);
-                const hours = Math.floor(minutes / 60);
-                const days = Math.floor(hours / 24);
-
-                let uptime = '';
-                if (days > 0) uptime += `${days}d `;
-                if (hours % 24 > 0) uptime += `${hours % 24}h `;
-                if (minutes % 60 > 0) uptime += `${minutes % 60}m `;
-                if (seconds % 60 > 0 || uptime === '') uptime += `${seconds % 60}s`; // Show seconds if nothing else, or if it's the only unit
-
-                return uptime.trim();
-            } catch (e) {
-                console.error("Error calculating uptime:", e);
-                return 'N/A';
-            }
-        }
-
+        // --- Metrics Modal Functions ---
         async function viewMetrics(containerId, containerName) {
-            DOMElements.metricsModalTitle.textContent = `Details & Metrics for ${containerName}`;
-            showModalLoading(DOMElements.metricsModalBody, 'Loading container details and metrics...');
+            DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
+            showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
             DOMElements.metricsModal.classList.remove('hidden');
 
             try {
-                // Fetch static details and live stats concurrently
-                const [detailsResponse, statsResponse] = await Promise.all([
-                    fetch(`/container/${containerId}/details`), // This calls the /details endpoint (for static config like env vars, mounts)
-                    fetch(`/container/${containerId}/metrics`)  // This calls the /metrics endpoint (for live usage data)
+                const [detailsResponse, metricsResponse] = await Promise.all([
+                    fetch(`/container/${containerId}/details`),
+                    fetch(`/container/${containerId}/metrics`)
                 ]);
 
-                if (!detailsResponse.ok) {
-                    const errorText = await detailsResponse.text();
-                    throw new Error(`HTTP error fetching details! status: ${detailsResponse.status} - ${errorText}`);
-                }
-                if (!statsResponse.ok) {
-                    const errorText = await statsResponse.text();
-                    throw new Error(`HTTP error fetching stats! status: ${statsResponse.status} - ${errorText}`);
-                }
-
                 const detailsData = await detailsResponse.json();
-                const statsData = await statsResponse.json();
+                const metricsData = await metricsResponse.json();
 
-                hideModalLoading(DOMElements.metricsModalBody);
-
-                // Process detailsData for static info
-                const created = detailsData.Created ? new Date(detailsData.Created).toLocaleString() : 'N/A';
-                const image = detailsData.Config && detailsData.Config.Image ? detailsData.Config.Image : 'N/A';
-                const status = detailsData.State && detailsData.State.Status ? detailsData.State.Status : 'N/A';
-                const runningSince = detailsData.State && detailsData.State.StartedAt ? detailsData.State.StartedAt : 'N/A';
-                const uptime = calculateUptime(runningSince);
-                const restartCount = detailsData.RestartCount !== undefined ? detailsData.RestartCount : 'N/A';
-
-                // Network details from detailsData
-                let networkInfoHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Network:</h3>';
-                if (detailsData.NetworkSettings && detailsData.NetworkSettings.Networks) {
-                    for (const netName in detailsData.NetworkSettings.Networks) {
-                        const net = detailsData.NetworkSettings.Networks[netName];
-                        networkInfoHtml += `
-                            <p class="text-lg mb-1"><span class="font-medium text-gray-700">${netName}:</span> IPv4: ${net.IPAddress || 'N/A'}, Gateway: ${net.Gateway || 'N/A'}</p>
-                        `;
-                    }
-                } else {
-                    networkInfoHtml += '<p class="text-lg mb-1 text-gray-600">No network settings found.</p>';
+                if (!detailsResponse.ok) {
+                    throw new Error(detailsData.error || 'Failed to load container details.');
+                }
+                if (!metricsResponse.ok) {
+                    throw new Error(metricsData.error || 'Failed to load container metrics.');
                 }
 
-
-                // Environment variables from detailsData
-                let envVarsHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Environment Variables:</h3>';
-                if (detailsData.Config && detailsData.Config.Env && detailsData.Config.Env.length > 0) {
-                    envVarsHtml += '<ul class="list-disc list-inside ml-4 text-lg">';
-                    detailsData.Config.Env.forEach(env => {
-                        envVarsHtml += `<li>${env}</li>`;
-                    });
-                    envVarsHtml += '</ul>';
-                } else {
-                    envVarsHtml += '<p class="text-lg mb-1 text-gray-600">No environment variables found.</p>';
-                }
-
-
-                // Mounts (Volumes) from detailsData
-                let mountsHtml = '<h3 class="text-xl font-semibold mb-2 text-gray-800">Mounts:</h3>';
-                if (detailsData.Mounts && detailsData.Mounts.length > 0) {
-                    mountsHtml += '<ul class="list-disc list-inside ml-4 text-lg">';
-                    detailsData.Mounts.forEach(mount => {
-                        mountsHtml += `<li>Type: ${mount.Type}, Source: ${mount.Source}, Destination: ${mount.Destination}, Mode: ${mount.Mode || 'rw'}</li>`;
-                    });
-                    mountsHtml += '</ul>';
-                } else {
-                    mountsHtml += '<p class="text-lg mb-1 text-gray-600">No mounts found.</p>';
-                }
-
-                // Render content for the metrics modal
-                DOMElements.metricsModalBody.innerHTML = `
-                    <div class="p-6 bg-white rounded-xl shadow-inner text-gray-800 w-full">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 border-b pb-6 border-gray-200">
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Name:</span> ${detailsData.Name ? detailsData.Name.substring(1) : 'N/A'}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">ID:</span> ${containerId}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Image:</span> ${image}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Status:</span> ${status}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Created:</span> ${created}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Uptime:</span> ${uptime}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Restart Count:</span> ${restartCount}</p></div>
-                            <div><p class="text-lg"><span class="font-semibold text-gray-700">Platform:</span> ${detailsData.Platform || 'N/A'}</p></div>
-                        </div>
-
-                        <h3 class="text-xl font-semibold mb-4 text-gray-800">Live Resource Usage:</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                            <div class="bg-blue-50 p-5 rounded-lg shadow-sm">
-                                <p class="text-sm font-medium text-blue-700">CPU Usage</p>
-                                <p class="text-3xl font-bold text-blue-900 mt-1">${statsData.cpu_percent.toFixed(2)}%</p>
-                            </div>
-                            <div class="bg-purple-50 p-5 rounded-lg shadow-sm">
-                                <p class="text-sm font-medium text-purple-700">Memory Usage</p>
-                                <p class="text-3xl font-bold text-purple-900 mt-1">${statsData.memory_usage.toFixed(2)} MB / ${statsData.memory_limit.toFixed(2)} MB</p>
-                                <p class="text-xs text-purple-600 mt-1">(${statsData.memory_percent.toFixed(2)}%)</p>
-                            </div>
-                            <div class="bg-green-50 p-5 rounded-lg shadow-sm">
-                                <p class="text-sm font-medium text-green-700">Network I/O</p>
-                                <p class="text-xl font-bold text-green-900 mt-1">${statsData.net_io_rx.toFixed(2)} MB (Rx) / ${statsData.net_io_tx.toFixed(2)} MB (Tx)</p>
-                            </div>
-                            <div class="bg-yellow-50 p-5 rounded-lg shadow-sm">
-                                <p class="text-sm font-medium text-yellow-700">Block I/O</p>
-                                <p class="text-xl font-bold text-yellow-900 mt-1">${statsData.block_io_read.toFixed(2)} MB (Read) / ${statsData.block_io_write.toFixed(2)} MB (Write)</p>
-                            </div>
-                        </div>
-
-                        <div class="mb-6">
-                            ${networkInfoHtml}
-                        </div>
-
-                        <div class="mb-6">
-                            ${envVarsHtml}
-                        </div>
-
-                        <div class="mb-6">
-                            ${mountsHtml}
-                        </div>
+                // Render Details
+                let detailsHtml = `
+                    <h3 class="text-2xl font-bold text-gray-900 mb-4 px-6 pt-6">Basic Info</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700 p-6 pt-0 bg-white rounded-xl shadow-md mb-6">
+                        <p><strong>ID:</strong> <span class="font-mono text-sm">${detailsData.Id}</span></p>
+                        <p><strong>Name:</strong> ${detailsData.Name}</p>
+                        <p><strong>Image:</strong> ${detailsData.Config.Image}</p>
+                        <p><strong>Status:</strong> ${detailsData.State.Status}</p>
+                        <p><strong>Created:</strong> ${moment(detailsData.Created).format('LLL')}</p>
+                        <p><strong>Platform:</strong> ${detailsData.Platform}</p>
+                        <p><strong>Path:</strong> ${detailsData.Path}</p>
+                        <p><strong>Args:</strong> ${detailsData.Args.join(' ')}</p>
                     </div>
                 `;
+
+                // Render Metrics if available
+                if (metricsData && !metricsData.error) {
+                    detailsHtml += `
+                        <h3 class="text-2xl font-bold text-gray-900 mb-4 px-6">Current Metrics</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-gray-700 p-6 bg-white rounded-xl shadow-md">
+                            <div class="bg-blue-50 p-5 rounded-lg border border-blue-200">
+                                <p class="text-lg font-semibold text-blue-800">CPU Usage:</p>
+                                <p class="text-3xl font-bold text-blue-900 mt-1">${metricsData.cpu_percent}%</p>
+                            </div>
+                            <div class="bg-purple-50 p-5 rounded-lg border border-purple-200">
+                                <p class="text-lg font-semibold text-purple-800">Memory Usage:</p>
+                                <p class="text-3xl font-bold text-purple-900 mt-1">${metricsData.memory_usage} MB / ${metricsData.memory_limit} MB</p>
+                                <p class="text-sm text-purple-600 mt-1">(${metricsData.memory_percent}%)</p>
+                            </div>
+                            <div class="bg-green-50 p-5 rounded-lg border border-green-200">
+                                <p class="text-lg font-semibold text-green-800">Network I/O (Rx/Tx):</p>
+                                <p class="text-2xl font-bold text-green-900 mt-1">${metricsData.net_io_rx} MB / ${metricsData.net_io_tx} MB</p>
+                            </div>
+                            <div class="bg-yellow-50 p-5 rounded-lg border border-yellow-200">
+                                <p class="text-lg font-semibold text-yellow-800">Block I/O (Read/Write):</p>
+                                <p class="text-2xl font-bold text-yellow-900 mt-1">${metricsData.block_io_read} MB / ${metricsData.block_io_write} MB</p>
+                            </div>
+                            <div class="col-span-full text-right text-sm text-gray-500 mt-4">
+                                Last Updated: ${metricsData.timestamp}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    detailsHtml += `<p class="text-gray-600 p-6">No real-time metrics available for this container.</p>`;
+                }
+
+                DOMElements.metricsModalBody.innerHTML = `<div class="bg-white rounded-2xl overflow-y-auto max-h-[70vh] custom-scrollbar">${detailsHtml}</div>`;
+
+
             } catch (error) {
-                console.error("Failed to fetch metrics:", error);
+                console.error('Error fetching details or metrics:', error);
+                DOMElements.metricsModalBody.innerHTML = `<p class="text-red-500 p-4">Error loading details/metrics: ${error.message}</p>`;
+                showMessageBox(`Error loading details/metrics: ${error.message}`, 'error');
+            } finally {
                 hideModalLoading(DOMElements.metricsModalBody);
-                DOMElements.metricsModalBody.innerHTML = `
-                    <div class="flex flex-col items-center justify-center py-10 text-center">
-                        <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4"></i>
-                        <span class="text-red-400 text-lg">Failed to load metrics: ${error.message}.<br>Ensure the container is running and Docker is accessible.</span>
-                    </div>
-                `;
-                showMessageBox(`Failed to load metrics for ${containerName}.`, 'error');
+                DOMElements.metricsModalBody.classList.remove('flex-col', 'items-center', 'justify-center');
             }
         }
 
+
         function closeMetricsModal() {
             DOMElements.metricsModal.classList.add('hidden');
-            DOMElements.metricsModalBody.innerHTML = ''; // Clear content when closing
+            DOMElements.metricsModalBody.innerHTML = ''; // Clear content
         }
     </script>
 </body>
