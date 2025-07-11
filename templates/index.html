@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Docker Environment Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -13,9 +13,16 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f1f5f9;
+            font-size: clamp(14px, 3.5vw, 16px);
         }
         .action-button {
-            @apply px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md;
+            @apply px-4 py-0 text-sm font-semibold rounded-xl transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md;
+            min-width: 100px;
+            touch-action: manipulation;
+            margin: 0;
+            padding-left: 0;
+            padding-right: 0;
+            line-height: 1; /* Tighten line height */
         }
         .action-button.start { @apply bg-green-600 hover:bg-green-700 text-white; }
         .action-button.stop { @apply bg-red-600 hover:bg-red-700 text-white; }
@@ -43,11 +50,11 @@
         .table-row-exited { @apply bg-red-50 hover:bg-red-100; }
         .table-row-other { @apply bg-blue-50 hover:bg-blue-100; }
 
-        /* Blinking Green Circle - Fixed Version */
+        /* Blinking Green Circle and Red Circle for Exited */
         .status-circle-icon {
             display: inline-block;
-            width: 12px;
-            height: 12px;
+            width: clamp(10px, 2vw, 12px);
+            height: clamp(10px, 2vw, 12px);
             border-radius: 50%;
             margin-right: 0.35rem;
         }
@@ -59,6 +66,7 @@
 
         .status-circle-icon.exited {
             background-color: #ef4444;
+            animation: blink-red 1s ease-in-out infinite;
         }
 
         .status-circle-icon.other {
@@ -66,18 +74,15 @@
         }
 
         @keyframes blink-green {
-            0% {
-                opacity: 1;
-                box-shadow: 0 0 0 rgba(34, 197, 94, 0.7);
-            }
-            50% {
-                opacity: 0.5;
-                box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
-            }
-            100% {
-                opacity: 1;
-                box-shadow: 0 0 0 rgba(34, 197, 94, 0.7);
-            }
+            0% { opacity: 1; box-shadow: 0 0 0 rgba(34, 197, 94, 0.7); }
+            50% { opacity: 0.5; box-shadow: 0 0 10px rgba(34, 197, 94, 0.9); }
+            100% { opacity: 1; box-shadow: 0 0 0 rgba(34, 197, 94, 0.7); }
+        }
+
+        @keyframes blink-red {
+            0% { opacity: 1; box-shadow: 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { opacity: 0.5; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); }
+            100% { opacity: 1; box-shadow: 0 0 0 rgba(239, 68, 68, 0.7); }
         }
 
         /* Modal styles */
@@ -95,25 +100,26 @@
             align-items: center;
             justify-content: center;
             animation: fadeInOverlay 0.3s ease-out;
+            padding: 1rem;
         }
         .modal-content {
             background-color: #ffffff;
             margin: auto;
-            padding: 32px; /* Retain padding around content */
-            border-radius: 1.5rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            width: 90%;
-            max-width: 850px; /* Default max-width for modals */
+            padding: clamp(16px, 4vw, 24px);
+            border-radius: 1rem;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            width: 95%;
+            max-width: clamp(300px, 90vw, 850px);
             max-height: 90vh;
             display: flex;
             flex-direction: column;
             animation: fadeInScale 0.3s ease-out;
+            overflow-y: auto;
         }
 
-        /* Specific width for Logs Modal Content */
         .logs-modal-content {
-            max-width: 1200px; /* Make logs modal wider */
-            width: 95%; /* Allow it to take up more screen width */
+            max-width: clamp(300px, 95vw, 1000px);
+            width: 95%;
         }
 
         @keyframes fadeInOverlay {
@@ -130,8 +136,8 @@
             border: 4px solid rgba(255, 255, 255, 0.2);
             border-top-color: #6366f1;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: clamp(32px, 5vw, 40px);
+            height: clamp(32px, 5vw, 40px);
             animation: spin 1s linear infinite;
         }
         @keyframes spin {
@@ -160,6 +166,7 @@
                 position: relative;
                 padding-left: 50%;
                 text-align: right;
+                padding: 0.75rem;
             }
             td:before {
                 content: attr(data-label);
@@ -172,102 +179,184 @@
                 font-weight: bold;
                 color: #475569;
             }
+            td[data-label="Actions"] {
+                padding-left: 0;
+                text-align: left;
+            }
+            td[data-label="Actions"] .actions-container {
+                margin: 0;
+                padding: 0;
+            }
+            td[data-label="Actions"] .actions-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem; /* Gap between buttons */
+                padding: 0;
+                margin: 0;
+            }
+            td[data-label="Actions"] .actions-buttons .action-button:first-child {
+                margin-top: 1.5rem; /* Gap from Actions */
+            }
+            td[data-label="Actions"] .action-button {
+                margin: 0;
+                padding: 0.25rem 1rem; /* Minimal vertical padding */
+                text-align: left;
+                width: auto;
+            }
         }
 
-        /* Log content specific styling */
+        /* Log content styling */
         .log-content {
-            font-family: 'JetBrains Mono', monospace; /* Apply monospaced font */
-            font-size: 0.875rem; /* Slightly smaller font for compactness */
-            line-height: 1.4; /* Improve line spacing */
-            white-space: pre-wrap; /* Preserve whitespace and wrap lines */
-            word-break: break-all; /* Break long words */
-            background-color: #1f2937; /* Dark background for logs */
-            color: #e5e7eb; /* Light text for contrast */
-            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: clamp(12px, 3vw, 14px);
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background-color: #1f2937;
+            color: #e5e7eb;
+            padding: clamp(1rem, 3vw, 1.5rem);
             border-radius: 0.75rem;
-            overflow-y: auto; /* Enable vertical scrolling */
-            max-height: 60vh; /* Max height for log area relative to viewport */
-            flex-grow: 1; /* Allow content to grow within the modal body */
-            border: 1px solid #374151; /* Subtle border */
+            overflow-y: auto;
+            max-height: 70vh;
+            flex-grow: 1;
+            border: 1px solid #374151;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-            text-align: left; /* Ensure text aligns left */
+            text-align: left;
         }
 
-        /* Adjust modal-body to correctly contain the log-content */
         .modal-body {
-            padding: 0; /* Remove padding from modal-body itself if log-content has its own */
-            overflow: hidden; /* Prevent modal-body scrollbar if log-content handles it */
-            display: flex; /* Make modal-body a flex container */
-            flex-direction: column; /* Stack content vertically */
-            /* Added margin-top for space between header and log content */
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
             margin-top: 1rem;
         }
 
-        /* Ensure the modal-content has padding around the log area */
         .modal-content .modal-header {
-            padding-bottom: 0; /* Remove bottom padding from header if modal-body has margin-top */
+            padding-bottom: 0;
+        }
+
+        /* Additional responsive adjustments */
+        @media screen and (max-width: 640px) {
+            .grid-cols-3, .grid-cols-2 {
+                grid-template-columns: 1fr !important;
+            }
+            .text-6xl {
+                font-size: clamp(2rem, 8vw, 2.5rem);
+            }
+            .text-5xl {
+                font-size: clamp(1.8rem, 7vw, 2.2rem);
+            }
+            .action-button {
+                padding: 0.75rem 1.5rem;
+                font-size: clamp(12px, 3.5vw, 14px);
+            }
+            .modal-content {
+                padding: clamp(12px, 3vw, 16px);
+            }
+            .modal-header h2 {
+                font-size: clamp(1.25rem, 5vw, 1.5rem);
+            }
+            .modal-footer button {
+                padding: 0.5rem 1rem;
+                font-size: clamp(12px, 3.5vw, 14px);
+            }
+            td[data-label="Actions"] .flex {
+                gap: 1rem;
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            .flex-wrap.gap-3 {
+                gap: 0.5rem;
+            }
+            .action-button {
+                min-width: 80px;
+            }
+            .text-3xl {
+                font-size: clamp(1.5rem, 6vw, 1.8rem);
+            }
+        }
+
+        /* Custom styling for Actions column */
+        .actions-container {
+            margin: 0;
+            padding: 0;
+        }
+        .actions-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem; /* Gap between buttons */
+            padding: 0;
+            margin: 0;
+        }
+        .actions-buttons .action-button {
+            display: block;
+            margin: 0;
+            padding: 0.25rem 1rem; /* Minimal vertical padding */
+            text-align: left;
         }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 sm:p-6 md:p-8">
-    <div class="max-w-7xl mx-auto bg-white shadow-3xl rounded-3xl p-8 sm:p-10 lg:p-12 border border-gray-200">
-        <h1 class="text-5xl sm:text-6xl font-extrabold text-center mb-10 text-gray-900 leading-tight tracking-tight">
-            <i class="fas fa-server text-indigo-700 mr-5 animate-pulse"></i>Docker Environment Dashboard
+    <div class="max-w-7xl mx-auto bg-white shadow-3xl rounded-3xl p-4 sm:p-6 md:p-8 border border-gray-200">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold text-center mb-8 text-gray-900 leading-tight tracking-tight">
+            <i class="fas fa-server text-indigo-700 mr-3 sm:mr-5 animate-pulse"></i>Docker Environment Dashboard
         </h1>
 
-        <div class="text-center text-gray-600 text-lg mb-8 font-medium">
+        <div class="text-center text-gray-600 text-base sm:text-lg mb-6 font-medium">
             Last Refreshed: <span id="lastRefreshedTime" class="text-gray-800 font-semibold"></span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 mb-10">
+            <div class="bg-gradient-to-br from-blue-600 to-blue-800 p-5 sm:p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
                 <div>
-                    <p class="text-xl font-semibold opacity-90">Total Containers</p>
-                    <p class="text-6xl font-bold mt-2">{{ total_count }}</p>
+                    <p class="text-base sm:text-xl font-semibold opacity-90">Total Containers</p>
+                    <p class="text-4xl sm:text-6xl font-bold mt-2">{{ total_count }}</p>
                 </div>
-                <i class="fas fa-cubes text-blue-300 text-7xl opacity-60"></i>
+                <i class="fas fa-cubes text-blue-300 text-5xl sm:text-7xl opacity-60"></i>
             </div>
-            <div class="bg-gradient-to-br from-green-600 to-green-800 p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
+            <div class="bg-gradient-to-br from-green-600 to-green-800 p-5 sm:p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
                 <div>
-                    <p class="text-xl font-semibold opacity-90">Running</p>
-                    <p class="text-6xl font-bold mt-2">{{ running_count }}</p>
+                    <p class="text-base sm:text-xl font-semibold opacity-90">Running</p>
+                    <p class="text-4xl sm:text-6xl font-bold mt-2">{{ running_count }}</p>
                 </div>
-                <i class="fas fa-play-circle text-green-300 text-7xl opacity-60"></i>
+                <i class="fas fa-play-circle text-green-300 text-5xl sm:text-7xl opacity-60"></i>
             </div>
-            <div class="bg-gradient-to-br from-red-600 to-red-800 p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
+            <div class="bg-gradient-to-br from-red-600 to-red-800 p-5 sm:p-7 rounded-2xl shadow-xl flex items-center justify-between text-white transform hover:scale-105 transition-transform duration-300 cursor-pointer">
                 <div>
-                    <p class="text-xl font-semibold opacity-90">Exited</p>
-                    <p class="text-6xl font-bold mt-2">{{ exited_count }}</p>
+                    <p class="text-base sm:text-xl font-semibold opacity-90">Exited</p>
+                    <p class="text-4xl sm:text-6xl font-bold mt-2">{{ exited_count }}</p>
                 </div>
-                <i class="fas fa-stop-circle text-red-300 text-7xl opacity-60"></i>
+                <i class="fas fa-stop-circle text-red-300 text-5xl sm:text-7xl opacity-60"></i>
             </div>
         </div>
 
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-10 space-y-5 sm:space-y-0 sm:space-x-6">
-            <div class="flex flex-wrap justify-center gap-4 w-full sm:w-auto">
-                <a href="/?filter=running" class="action-button px-6 py-3 rounded-2xl
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-8 space-y-4 sm:space-y-0 sm:space-x-4">
+            <div class="flex flex-wrap justify-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <a href="/?filter=running" class="action-button px-4 sm:px-6 py-2 sm:py-3 rounded-2xl
                     {% if filter_type == 'running' %}bg-green-700 text-white shadow-lg{% else %}bg-green-100 text-green-800 hover:bg-green-200{% endif %}">
                     <i class="fas fa-play mr-2"></i> Running
                 </a>
-                <a href="/?filter=exited" class="action-button px-6 py-3 rounded-2xl
+                <a href="/?filter=exited" class="action-button px-4 sm:px-6 py-2 sm:py-3 rounded-2xl
                     {% if filter_type == 'exited' %}bg-red-700 text-white shadow-lg{% else %}bg-red-100 text-red-800 hover:bg-red-200{% endif %}">
                     <i class="fas fa-stop mr-2"></i> Exited
                 </a>
-                <a href="/?filter=all" class="action-button px-6 py-3 rounded-2xl
+                <a href="/?filter=all" class="action-button px-4 sm:px-6 py-2 sm:py-3 rounded-2xl
                     {% if filter_type == 'all' %}bg-indigo-700 text-white shadow-lg{% else %}bg-indigo-100 text-indigo-800 hover:bg-indigo-200{% endif %}">
                     <i class="fas fa-list-ul mr-2"></i> All
                 </a>
-                <button onclick="location.reload()" class="action-button px-6 py-3 rounded-2xl bg-gray-200 text-gray-700 hover:bg-gray-300">
+                <button onclick="location.reload()" class="action-button px-4 sm:px-6 py-2 sm:py-3 rounded-2xl bg-gray-200 text-gray-700 hover:bg-gray-300">
                     <i class="fas fa-sync-alt mr-2"></i> Refresh
-                </button>
-                <button id="toggleAutoRefreshButton" class="action-button px-6 py-3 rounded-2xl bg-teal-500 text-white hover:bg-teal-600">
+                </a>
+                <button id="toggleAutoRefreshButton" class="action-button px-4 sm:px-6 py-2 sm:py-3 rounded-2xl bg-teal-500 text-white hover:bg-teal-600">
                     <i class="fas fa-history mr-2"></i> Auto-Refresh: <span id="autoRefreshStatus">On</span>
                 </button>
             </div>
             <div class="relative w-full sm:w-auto">
                 <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search containers..."
-                       class="w-full pl-14 pr-6 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-lg">
-                <i class="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 text-xl"></i>
+                       class="w-full pl-10 sm:pl-14 pr-4 sm:pr-6 py-2 sm:py-3 border border-gray-300 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-transparent transition-all duration-300 text-base sm:text-lg">
+                <i class="fas fa-search absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 text-gray-400 text-base sm:text-xl"></i>
             </div>
         </div>
 
@@ -275,31 +364,31 @@
             <table class="min-w-full divide-y divide-gray-200" id="containerTable">
                 <thead class="bg-gray-100">
                     <tr>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider rounded-tl-2xl">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider rounded-tl-2xl">
                             ID
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Name
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Image
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Status
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Ports
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Created
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Size
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                             Command
                         </th>
-                        <th scope="col" class="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider rounded-tr-2xl">
+                        <th scope="col" class="px-4 sm:px-6 py-3 sm:py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider rounded-tr-2xl">
                             Actions
                         </th>
                     </tr>
@@ -312,29 +401,33 @@
                         {% else %}table-row-other
                         {% endif %}
                     ">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900" data-label="ID">{{ c.short_id }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" data-label="Name">{{ c.name }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Image">{{ c.image_tag }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Status">
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-mono text-gray-900" data-label="ID">{{ c.short_id }}</td>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-900" data-label="Name">{{ c.name }}</td>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700" data-label="Image">{{ c.image_tag }}</td>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium" data-label="Status">
                             <span class="status-badge {% if 'Up' in c.status or 'running' in c.status.lower() %}status-badge-running{% elif 'Exited' in c.status %}status-badge-exited{% else %}status-badge-other{% endif %}">
                                 <span class="status-circle-icon {% if 'Up' in c.status or 'running' in c.status.lower() %}running{% elif 'Exited' in c.status %}exited{% else %}other{% endif %}"></span>
                                 {{ c.status }}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Ports">{{ c.ports }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 created-at-cell" data-label="Created" data-timestamp="{{ c.created_at }}">
-                            {{ c.created_at }} {# Fallback if JS fails, or for initial load #}
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700" data-label="Ports">{{ c.ports }}</td>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700 created-at-cell" data-label="Created" data-timestamp="{{ c.created_at }}">
+                            {{ c.created_at }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Size">{{ c.size }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" data-label="Actions">
-                            <div class="flex flex-wrap gap-3">
-                                <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
-                                    <i class="fas fa-file-alt mr-1"></i>Logs
-                                </button>
-                                <button type="button" onclick="viewMetrics('{{ c.id }}', '{{ c.name }}')" class="action-button details" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
-                                    <i class="fas fa-chart-line mr-1"></i>Metrics
-                                </button>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700" data-label="Size">{{ c.size }}</td>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
+                        <td class="px-4 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-sm font-medium" data-label="Actions">
+                            <div class="actions-container">
+                                <!-- Start of arrangement for Actions column -->
+                                <div class="actions-buttons">
+                                    <button type="button" onclick="viewLogs('{{ c.id }}', '{{ c.name }}')" class="action-button logs" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
+                                        <i class="fas fa-file-alt mr-1"></i>Logs
+                                    </button>
+                                    <button type="button" onclick="viewMetrics('{{ c.id }}', '{{ c.name }}')" class="action-button details" data-container-id="{{ c.id }}" data-container-name="{{ c.name }}">
+                                        <i class="fas fa-chart-line mr-1"></i>Metrics
+                                    </button>
+                                </div>
+                                <!-- End of arrangement for Actions column -->
                             </div>
                         </td>
                     </tr>
@@ -342,29 +435,29 @@
                 </tbody>
             </table>
             {% if not containers %}
-            <div class="p-8 text-center text-gray-500 text-lg">
-                <i class="fas fa-box-open text-6xl mb-4"></i>
+            <div class="p-6 sm:p-8 text-center text-gray-500 text-base sm:text-lg">
+                <i class="fas fa-box-open text-4xl sm:text-6xl mb-4"></i>
                 <p>No containers found matching the current filter.</p>
                 <p class="mt-2">Try selecting "All" or starting a new container.</p>
             </div>
             {% endif %}
         </div>
 
-        <div id="messageBox" class="fixed bottom-8 right-8 bg-blue-600 text-white px-8 py-4 rounded-xl shadow-2xl hidden z-50 transition-all duration-500 transform translate-y-full opacity-0">
-            <p id="messageText" class="text-lg font-medium"></p>
-            <button onclick="hideMessageBox()" class="absolute top-3 right-4 text-white text-2xl font-bold">&times;</button>
+        <div id="messageBox" class="fixed bottom-4 sm:bottom-8 right-4 sm:right-8 bg-blue-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl shadow-2xl hidden z-50 transition-all duration-500 transform translate-y-full opacity-0">
+            <p id="messageText" class="text-base sm:text-lg font-medium"></p>
+            <button onclick="hideMessageBox()" class="absolute top-2 sm:top-3 right-3 sm:right-4 text-white text-xl sm:text-2xl font-bold">×</button>
         </div>
 
         <div id="confirmationModal" class="modal hidden">
             <div class="modal-content text-gray-800">
                 <div class="modal-header">
                     <h2 class="modal-title" id="confirmationTitle">Confirm Action</h2>
-                    <span class="close-button" onclick="closeConfirmationModal()">&times;</span>
+                    <span class="close-button" onclick="closeConfirmationModal()">×</span>
                 </div>
-                <div class="modal-body !bg-white !text-gray-800 text-lg">
+                <div class="modal-body !bg-white !text-gray-800 text-base sm:text-lg">
                     <p id="confirmationMessage"></p>
                 </div>
-                <div class="modal-footer flex justify-end space-x-4 mt-6">
+                <div class="modal-footer flex justify-end space-x-3 sm:space-x-4 mt-4 sm:mt-6">
                     <button onclick="closeConfirmationModal()" class="action-button bg-gray-300 hover:bg-gray-400 text-gray-800">Cancel</button>
                     <button id="confirmActionButton" class="action-button bg-red-600 hover:bg-red-700 text-white">Confirm</button>
                 </div>
@@ -375,16 +468,16 @@
             <div class="modal-content text-gray-800 logs-modal-content">
                 <div class="modal-header">
                     <h2 class="modal-title" id="logsModalTitle">Container Logs</h2>
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-3 sm:space-x-4">
                         <button onclick="copyLogsToClipboard()" class="action-button bg-gray-200 text-gray-700 hover:bg-gray-300">
                             <i class="fas fa-copy mr-2"></i>Copy
                         </button>
-                        <span class="close-button" onclick="closeLogsModal()">&times;</span>
+                        <span class="close-button" onclick="closeLogsModal()">×</span>
                     </div>
                 </div>
                 <div id="logsModalBody" class="modal-body flex items-center justify-center">
                     <div class="spinner"></div>
-                    <span class="ml-4 text-gray-400 text-lg">Loading logs...</span>
+                    <span class="ml-4 text-gray-400 text-base sm:text-lg">Loading logs...</span>
                 </div>
             </div>
         </div>
@@ -393,12 +486,12 @@
             <div class="modal-content text-gray-800">
                 <div class="modal-header">
                     <h2 class="modal-title" id="metricsModalTitle">Container Details & Metrics</h2>
-                    <span class="close-button" onclick="closeMetricsModal()">&times;</span>
+                    <span class="close-button" onclick="closeMetricsModal()">×</span>
                 </div>
                 <div id="metricsModalBody" class="modal-body text-gray-100">
-                    <div class="flex flex-col items-center justify-center py-10">
+                    <div class="flex flex-col items-center justify-center py-8 sm:py-10">
                         <div class="spinner"></div>
-                        <span class="ml-4 text-gray-400 text-lg mt-4">Loading metrics...</span>
+                        <span class="ml-4 text-gray-400 text-base sm:text-lg mt-4">Loading metrics...</span>
                     </div>
                 </div>
             </div>
@@ -428,15 +521,12 @@
             autoRefreshStatus: document.getElementById('autoRefreshStatus')
         };
 
-        let autoRefreshIntervalId; // To store the interval ID
-        const AUTO_REFRESH_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+        let autoRefreshIntervalId;
+        const AUTO_REFRESH_DURATION = 5 * 60 * 1000;
 
-        // Function to show custom message box
         function showMessageBox(message, type = 'info') {
             DOMElements.messageText.textContent = message;
-
             DOMElements.messageBox.classList.remove('bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'hidden', 'translate-y-full', 'opacity-0', 'message-box-hide');
-
             if (type === 'success') {
                 DOMElements.messageBox.classList.add('bg-green-600');
             } else if (type === 'error') {
@@ -446,15 +536,12 @@
             } else {
                 DOMElements.messageBox.classList.add('bg-blue-600');
             }
-
             DOMElements.messageBox.classList.add('translate-y-0', 'opacity-100');
-
             setTimeout(() => {
                 hideMessageBox();
             }, 5000);
         }
 
-        // Function to hide custom message box
         function hideMessageBox() {
             DOMElements.messageBox.classList.add('message-box-hide');
             setTimeout(() => {
@@ -463,7 +550,6 @@
             }, 500);
         }
 
-        // Function to update the last refreshed time
         function updateLastRefreshedTime() {
             const now = new Date();
             const options = {
@@ -474,7 +560,6 @@
             DOMElements.lastRefreshedTime.textContent = now.toLocaleString('en-US', options);
         }
 
-        // Function to format "Created" timestamps
         function formatCreatedTimestamps() {
             const createdCells = document.querySelectorAll('.created-at-cell');
             createdCells.forEach(cell => {
@@ -485,10 +570,7 @@
             });
         }
 
-
-        // --- Auto-Refresh Logic ---
         function startAutoRefresh() {
-            // Clear any existing interval to prevent duplicates
             if (autoRefreshIntervalId) {
                 clearInterval(autoRefreshIntervalId);
             }
@@ -524,7 +606,6 @@
             }
         }
 
-        // Initial setup on page load
         document.addEventListener('DOMContentLoaded', function() {
             const urlParams = new URLSearchParams(window.location.search);
             const message = urlParams.get('message');
@@ -535,54 +616,42 @@
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
-            // Check session storage for auto-refresh preference
             const autoRefreshEnabled = sessionStorage.getItem('autoRefreshEnabled');
-            if (autoRefreshEnabled === 'true' || autoRefreshEnabled === null) { // Default to true if not set
+            if (autoRefreshEnabled === 'true' || autoRefreshEnabled === null) {
                 startAutoRefresh();
             } else {
                 stopAutoRefresh();
             }
 
             updateLastRefreshedTime();
-            formatCreatedTimestamps(); // Call this on DOMContentLoaded
-
-            // Attach event listener to the toggle button
+            formatCreatedTimestamps();
             DOMElements.toggleAutoRefreshButton.addEventListener('click', toggleAutoRefresh);
         });
 
-        // JavaScript for table search/filter
         function filterTable() {
             const filter = DOMElements.searchInput.value.toLowerCase();
             const tr = DOMElements.containerTable.getElementsByTagName("tr");
-
-            for (let i = 1; i < tr.length; i++) { // Start from 1 to skip table header row
+            for (let i = 1; i < tr.length; i++) {
                 let found = false;
                 const td = tr[i].getElementsByTagName("td");
                 for (let j = 0; j < td.length; j++) {
-                    // Check against both original and formatted text content
                     const cellText = td[j].textContent || td[j].innerText;
-                    const originalTimestamp = td[j].dataset.timestamp; // Get original timestamp if available
-
+                    const originalTimestamp = td[j].dataset.timestamp;
                     if (cellText.toLowerCase().indexOf(filter) > -1 ||
                         (originalTimestamp && originalTimestamp.toLowerCase().indexOf(filter) > -1)) {
                         found = true;
                         break;
                     }
                 }
-                if (found) {
-                    tr[i].style.display = "";
-                } else {
-                    tr[i].style.display = "none";
-                }
+                tr[i].style.display = found ? "" : "none";
             }
         }
 
-        // --- Confirmation Modal Functions ---
         let currentConfirmAction = null;
 
         function showConfirmationModal(title, message, confirmCallback) {
             DOMElements.confirmationModal.classList.remove('hidden');
-            DOMEElements.confirmationTitle.textContent = title;
+            DOMElements.confirmationTitle.textContent = title;
             DOMElements.confirmationMessage.textContent = message;
             currentConfirmAction = confirmCallback;
             DOMElements.confirmActionButton.onclick = () => {
@@ -598,25 +667,21 @@
             currentConfirmAction = null;
         }
 
-        // --- Generic Modal Loading State Functions ---
         function showModalLoading(modalBodyElement, message = 'Loading data...') {
             modalBodyElement.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-10">
+                <div class="flex flex-col items-center justify-center py-8 sm:py-10">
                     <div class="spinner"></div>
-                    <span class="ml-4 text-gray-400 text-lg mt-4">${message}</span>
+                    <span class="ml-4 text-gray-400 text-base sm:text-lg mt-4">${message}</span>
                 </div>
             `;
-            // Ensure the modal body is set up for center alignment
-            modalBodyElement.classList.remove('flex-row'); // Just in case
+            modalBodyElement.classList.remove('flex-row');
             modalBodyElement.classList.add('flex-col', 'items-center', 'justify-center');
         }
 
         function hideModalLoading(modalBodyElement) {
-            // Revert modal body flex properties if content dictates
             modalBodyElement.classList.remove('flex-col', 'items-center', 'justify-center');
         }
 
-        // --- Logs Modal Functions ---
         async function viewLogs(containerId, containerName) {
             DOMElements.logsModalTitle.textContent = `Logs for ${containerName}`;
             showModalLoading(DOMElements.logsModalBody, 'Loading container logs...');
@@ -625,7 +690,6 @@
             try {
                 const response = await fetch(`/container/${containerId}/logs`);
                 const data = await response.json();
-
                 if (response.ok) {
                     DOMElements.logsModalBody.innerHTML = `<pre class="log-content">${data.logs || 'No logs available.'}</pre>`;
                 } else {
@@ -638,13 +702,13 @@
                 showMessageBox(`An unexpected error occurred while fetching logs: ${error.message}`, 'error');
             } finally {
                 hideModalLoading(DOMElements.logsModalBody);
-                DOMElements.logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Ensure flex is removed
+                DOMElements.logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center');
             }
         }
 
         function closeLogsModal() {
             DOMElements.logsModal.classList.add('hidden');
-            DOMElements.logsModalBody.innerHTML = ''; // Clear content
+            DOMElements.logsModalBody.innerHTML = '';
         }
 
         function copyLogsToClipboard() {
@@ -656,7 +720,6 @@
             }
         }
 
-        // --- Metrics Modal Functions ---
         async function viewMetrics(containerId, containerName) {
             DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
             showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
@@ -678,11 +741,10 @@
                     throw new Error(metricsData.error || 'Failed to load container metrics.');
                 }
 
-                // Render Details
                 let detailsHtml = `
-                    <h3 class="text-2xl font-bold text-gray-900 mb-4 px-6 pt-6">Basic Info</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700 p-6 pt-0 bg-white rounded-xl shadow-md mb-6">
-                        <p><strong>ID:</strong> <span class="font-mono text-sm">${detailsData.Id}</span></p>
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4 px-4 sm:px-6 pt-4 sm:pt-6">Basic Info</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700 p-4 sm:p-6 pt-0 bg-white rounded-xl shadow-md mb-6">
+                        <p><strong>ID:</strong> <span class="font-mono text-xs sm:text-sm">${detailsData.Id}</span></p>
                         <p><strong>Name:</strong> ${detailsData.Name}</p>
                         <p><strong>Image:</strong> ${detailsData.Config.Image}</p>
                         <p><strong>Status:</strong> ${detailsData.State.Status}</p>
@@ -693,40 +755,37 @@
                     </div>
                 `;
 
-                // Render Metrics if available
                 if (metricsData && !metricsData.error) {
                     detailsHtml += `
-                        <h3 class="text-2xl font-bold text-gray-900 mb-4 px-6">Current Metrics</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-gray-700 p-6 bg-white rounded-xl shadow-md">
-                            <div class="bg-blue-50 p-5 rounded-lg border border-blue-200">
-                                <p class="text-lg font-semibold text-blue-800">CPU Usage:</p>
-                                <p class="text-3xl font-bold text-blue-900 mt-1">${metricsData.cpu_percent}%</p>
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4 px-4 sm:px-6">Current Metrics</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 text-gray-700 p-4 sm:p-6 bg-white rounded-xl shadow-md">
+                            <div class="bg-blue-50 p-4 sm:p-5 rounded-lg border border-blue-200">
+                                <p class="text-base sm:text-lg font-semibold text-blue-800">CPU Usage:</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-blue-900 mt-1">${metricsData.cpu_percent}%</p>
                             </div>
-                            <div class="bg-purple-50 p-5 rounded-lg border border-purple-200">
-                                <p class="text-lg font-semibold text-purple-800">Memory Usage:</p>
-                                <p class="text-3xl font-bold text-purple-900 mt-1">${metricsData.memory_usage} MB / ${metricsData.memory_limit} MB</p>
-                                <p class="text-sm text-purple-600 mt-1">(${metricsData.memory_percent}%)</p>
+                            <div class="bg-purple-50 p-4 sm:p-5 rounded-lg border border-purple-200">
+                                <p class="text-base sm:text-lg font-semibold text-purple-800">Memory Usage:</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-purple-900 mt-1">${metricsData.memory_usage} MB / ${metricsData.memory_limit} MB</p>
+                                <p class="text-xs sm:text-sm text-purple-600 mt-1">(${metricsData.memory_percent}%)</p>
                             </div>
-                            <div class="bg-green-50 p-5 rounded-lg border border-green-200">
-                                <p class="text-lg font-semibold text-green-800">Network I/O (Rx/Tx):</p>
-                                <p class="text-2xl font-bold text-green-900 mt-1">${metricsData.net_io_rx} MB / ${metricsData.net_io_tx} MB</p>
+                            <div class="bg-green-50 p-4 sm:p-5 rounded-lg border border-green-200">
+                                <p class="text-base sm:text-lg font-semibold text-green-800">Network I/O (Rx/Tx):</p>
+                                <p class="text-xl sm:text-2xl font-bold text-green-900 mt-1">${metricsData.net_io_rx} MB / ${metricsData.net_io_tx} MB</p>
                             </div>
-                            <div class="bg-yellow-50 p-5 rounded-lg border border-yellow-200">
-                                <p class="text-lg font-semibold text-yellow-800">Block I/O (Read/Write):</p>
-                                <p class="text-2xl font-bold text-yellow-900 mt-1">${metricsData.block_io_read} MB / ${metricsData.block_io_write} MB</p>
+                            <div class="bg-yellow-50 p-4 sm:p-5 rounded-lg border border-yellow-200">
+                                <p class="text-base sm:text-lg font-semibold text-yellow-800">Block I/O (Read/Write):</p>
+                                <p class="text-xl sm:text-2xl font-bold text-yellow-900 mt-1">${metricsData.block_io_read} MB / ${metricsData.block_io_write} MB</p>
                             </div>
-                            <div class="col-span-full text-right text-sm text-gray-500 mt-4">
+                            <div class="col-span-full text-right text-xs sm:text-sm text-gray-500 mt-4">
                                 Last Updated: ${metricsData.timestamp}
                             </div>
                         </div>
                     `;
                 } else {
-                    detailsHtml += `<p class="text-gray-600 p-6">No real-time metrics available for this container.</p>`;
+                    detailsHtml += `<p class="text-gray-600 p-4 sm:p-6">No real-time metrics available for this container.</p>`;
                 }
 
                 DOMElements.metricsModalBody.innerHTML = `<div class="bg-white rounded-2xl overflow-y-auto max-h-[70vh] custom-scrollbar">${detailsHtml}</div>`;
-
-
             } catch (error) {
                 console.error('Error fetching details or metrics:', error);
                 DOMElements.metricsModalBody.innerHTML = `<p class="text-red-500 p-4">Error loading details/metrics: ${error.message}</p>`;
@@ -737,10 +796,9 @@
             }
         }
 
-
         function closeMetricsModal() {
             DOMElements.metricsModal.classList.add('hidden');
-            DOMElements.metricsModalBody.innerHTML = ''; // Clear content
+            DOMElements.metricsModalBody.innerHTML = '';
         }
     </script>
 </body>
