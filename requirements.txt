@@ -2,3 +2,4 @@ flask
 docker
 psutil
 humanize
+flask-login

@@ -23,6 +23,7 @@
         .action-button.remove { @apply bg-gray-600 hover:bg-gray-700 text-white; }
         .action-button.logs { @apply bg-purple-600 hover:bg-purple-700 text-white; }
         .action-button.details { @apply bg-indigo-600 hover:bg-indigo-700 text-white; }
+        .action-button.logout { @apply bg-orange-600 hover:bg-orange-700 text-white; } /* Added for logout button */
 
         /* Status Badges */
         .status-badge {
@@ -99,21 +100,20 @@
         .modal-content {
             background-color: #ffffff;
             margin: auto;
-            padding: 32px; /* Retain padding around content */
+            padding: 32px;
             border-radius: 1.5rem;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             width: 90%;
-            max-width: 850px; /* Default max-width for modals */
+            max-width: 850px;
             max-height: 90vh;
             display: flex;
             flex-direction: column;
             animation: fadeInScale 0.3s ease-out;
         }
 
-        /* Specific width for Logs Modal Content */
         .logs-modal-content {
-            max-width: 1200px; /* Make logs modal wider */
-            width: 95%; /* Allow it to take up more screen width */
+            max-width: 1200px;
+            width: 95%;
         }
 
         @keyframes fadeInOverlay {
@@ -125,7 +125,6 @@
             to { opacity: 1; transform: scale(1); }
         }
 
-        /* Spinner animation */
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.2);
             border-top-color: #6366f1;
@@ -139,7 +138,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Responsive table */
         @media screen and (max-width: 768px) {
             table, thead, tbody, th, td, tr {
                 display: block;
@@ -174,38 +172,34 @@
             }
         }
 
-        /* Log content specific styling */
         .log-content {
-            font-family: 'JetBrains Mono', monospace; /* Apply monospaced font */
-            font-size: 0.875rem; /* Slightly smaller font for compactness */
-            line-height: 1.4; /* Improve line spacing */
-            white-space: pre-wrap; /* Preserve whitespace and wrap lines */
-            word-break: break-all; /* Break long words */
-            background-color: #1f2937; /* Dark background for logs */
-            color: #e5e7eb; /* Light text for contrast */
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background-color: #1f2937;
+            color: #e5e7eb;
             padding: 1.5rem;
             border-radius: 0.75rem;
-            overflow-y: auto; /* Enable vertical scrolling */
-            max-height: 60vh; /* Max height for log area relative to viewport */
-            flex-grow: 1; /* Allow content to grow within the modal body */
-            border: 1px solid #374151; /* Subtle border */
+            overflow-y: auto;
+            max-height: 60vh;
+            flex-grow: 1;
+            border: 1px solid #374151;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-            text-align: left; /* Ensure text aligns left */
+            text-align: left;
         }
 
-        /* Adjust modal-body to correctly contain the log-content */
         .modal-body {
-            padding: 0; /* Remove padding from modal-body itself if log-content has its own */
-            overflow: hidden; /* Prevent modal-body scrollbar if log-content handles it */
-            display: flex; /* Make modal-body a flex container */
-            flex-direction: column; /* Stack content vertically */
-            /* Added margin-top for space between header and log content */
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
             margin-top: 1rem;
         }
 
-        /* Ensure the modal-content has padding around the log area */
         .modal-content .modal-header {
-            padding-bottom: 0; /* Remove bottom padding from header if modal-body has margin-top */
+            padding-bottom: 0;
         }
     </style>
 </head>
@@ -263,6 +257,9 @@
                 <button id="toggleAutoRefreshButton" class="action-button px-6 py-3 rounded-2xl bg-teal-500 text-white hover:bg-teal-600">
                     <i class="fas fa-history mr-2"></i> Auto-Refresh: <span id="autoRefreshStatus">On</span>
                 </button>
+                <a href="/logout" class="action-button logout px-6 py-3 rounded-2xl">
+                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                </a>
             </div>
             <div class="relative w-full sm:w-auto">
                 <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="Search containers..."
@@ -323,7 +320,7 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Ports">{{ c.ports }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 created-at-cell" data-label="Created" data-timestamp="{{ c.created_at }}">
-                            {{ c.created_at }} {# Fallback if JS fails, or for initial load #}
+                            {{ c.created_at }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700" data-label="Size">{{ c.size }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700 max-w-xs overflow-hidden text-ellipsis" data-label="Command">{{ c.command }}</td>
@@ -352,14 +349,14 @@
 
         <div id="messageBox" class="fixed bottom-8 right-8 bg-blue-600 text-white px-8 py-4 rounded-xl shadow-2xl hidden z-50 transition-all duration-500 transform translate-y-full opacity-0">
             <p id="messageText" class="text-lg font-medium"></p>
-            <button onclick="hideMessageBox()" class="absolute top-3 right-4 text-white text-2xl font-bold">&times;</button>
+            <button onclick="hideMessageBox()" class="absolute top-3 right-4 text-white text-2xl font-bold">×</button>
         </div>
 
         <div id="confirmationModal" class="modal hidden">
             <div class="modal-content text-gray-800">
                 <div class="modal-header">
                     <h2 class="modal-title" id="confirmationTitle">Confirm Action</h2>
-                    <span class="close-button" onclick="closeConfirmationModal()">&times;</span>
+                    <span class="close-button" onclick="closeConfirmationModal()">×</span>
                 </div>
                 <div class="modal-body !bg-white !text-gray-800 text-lg">
                     <p id="confirmationMessage"></p>
@@ -379,7 +376,7 @@
                         <button onclick="copyLogsToClipboard()" class="action-button bg-gray-200 text-gray-700 hover:bg-gray-300">
                             <i class="fas fa-copy mr-2"></i>Copy
                         </button>
-                        <span class="close-button" onclick="closeLogsModal()">&times;</span>
+                        <span class="close-button" onclick="closeLogsModal()">×</span>
                     </div>
                 </div>
                 <div id="logsModalBody" class="modal-body flex items-center justify-center">
@@ -393,7 +390,7 @@
             <div class="modal-content text-gray-800">
                 <div class="modal-header">
                     <h2 class="modal-title" id="metricsModalTitle">Container Details & Metrics</h2>
-                    <span class="close-button" onclick="closeMetricsModal()">&times;</span>
+                    <span class="close-button" onclick="closeMetricsModal()">×</span>
                 </div>
                 <div id="metricsModalBody" class="modal-body text-gray-100">
                     <div class="flex flex-col items-center justify-center py-10">
@@ -403,7 +400,6 @@
                 </div>
             </div>
         </div>
-
     </div>
 
     <script>
@@ -428,15 +424,12 @@
             autoRefreshStatus: document.getElementById('autoRefreshStatus')
         };
 
-        let autoRefreshIntervalId; // To store the interval ID
-        const AUTO_REFRESH_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+        let autoRefreshIntervalId;
+        const AUTO_REFRESH_DURATION = 5 * 60 * 1000;
 
-        // Function to show custom message box
         function showMessageBox(message, type = 'info') {
             DOMElements.messageText.textContent = message;
-
             DOMElements.messageBox.classList.remove('bg-blue-600', 'bg-green-600', 'bg-red-600', 'bg-yellow-600', 'hidden', 'translate-y-full', 'opacity-0', 'message-box-hide');
-
             if (type === 'success') {
                 DOMElements.messageBox.classList.add('bg-green-600');
             } else if (type === 'error') {
@@ -446,15 +439,12 @@
             } else {
                 DOMElements.messageBox.classList.add('bg-blue-600');
             }
-
             DOMElements.messageBox.classList.add('translate-y-0', 'opacity-100');
-
             setTimeout(() => {
                 hideMessageBox();
             }, 5000);
         }
 
-        // Function to hide custom message box
         function hideMessageBox() {
             DOMElements.messageBox.classList.add('message-box-hide');
             setTimeout(() => {
@@ -463,7 +453,6 @@
             }, 500);
         }
 
-        // Function to update the last refreshed time
         function updateLastRefreshedTime() {
             const now = new Date();
             const options = {
@@ -474,7 +463,6 @@
             DOMElements.lastRefreshedTime.textContent = now.toLocaleString('en-US', options);
         }
 
-        // Function to format "Created" timestamps
         function formatCreatedTimestamps() {
             const createdCells = document.querySelectorAll('.created-at-cell');
             createdCells.forEach(cell => {
@@ -485,10 +473,7 @@
             });
         }
 
-
-        // --- Auto-Refresh Logic ---
         function startAutoRefresh() {
-            // Clear any existing interval to prevent duplicates
             if (autoRefreshIntervalId) {
                 clearInterval(autoRefreshIntervalId);
             }
@@ -524,7 +509,6 @@
             }
         }
 
-        // Initial setup on page load
         document.addEventListener('DOMContentLoaded', function() {
             const urlParams = new URLSearchParams(window.location.search);
             const message = urlParams.get('message');
@@ -535,34 +519,27 @@
                 window.history.replaceState({ path: newUrl }, '', newUrl);
             }
 
-            // Check session storage for auto-refresh preference
             const autoRefreshEnabled = sessionStorage.getItem('autoRefreshEnabled');
-            if (autoRefreshEnabled === 'true' || autoRefreshEnabled === null) { // Default to true if not set
+            if (autoRefreshEnabled === 'true' || autoRefreshEnabled === null) {
                 startAutoRefresh();
             } else {
                 stopAutoRefresh();
             }
 
             updateLastRefreshedTime();
-            formatCreatedTimestamps(); // Call this on DOMContentLoaded
-
-            // Attach event listener to the toggle button
+            formatCreatedTimestamps();
             DOMElements.toggleAutoRefreshButton.addEventListener('click', toggleAutoRefresh);
         });
 
-        // JavaScript for table search/filter
         function filterTable() {
             const filter = DOMElements.searchInput.value.toLowerCase();
             const tr = DOMElements.containerTable.getElementsByTagName("tr");
-
-            for (let i = 1; i < tr.length; i++) { // Start from 1 to skip table header row
+            for (let i = 1; i < tr.length; i++) {
                 let found = false;
                 const td = tr[i].getElementsByTagName("td");
                 for (let j = 0; j < td.length; j++) {
-                    // Check against both original and formatted text content
                     const cellText = td[j].textContent || td[j].innerText;
-                    const originalTimestamp = td[j].dataset.timestamp; // Get original timestamp if available
-
+                    const originalTimestamp = td[j].dataset.timestamp;
                     if (cellText.toLowerCase().indexOf(filter) > -1 ||
                         (originalTimestamp && originalTimestamp.toLowerCase().indexOf(filter) > -1)) {
                         found = true;
@@ -577,12 +554,11 @@
             }
         }
 
-        // --- Confirmation Modal Functions ---
         let currentConfirmAction = null;
 
         function showConfirmationModal(title, message, confirmCallback) {
             DOMElements.confirmationModal.classList.remove('hidden');
-            DOMEElements.confirmationTitle.textContent = title;
+            DOMElements.confirmationTitle.textContent = title; // Fixed typo: DOMEElements -> DOMElements
             DOMElements.confirmationMessage.textContent = message;
             currentConfirmAction = confirmCallback;
             DOMElements.confirmActionButton.onclick = () => {
@@ -598,7 +574,6 @@
             currentConfirmAction = null;
         }
 
-        // --- Generic Modal Loading State Functions ---
         function showModalLoading(modalBodyElement, message = 'Loading data...') {
             modalBodyElement.innerHTML = `
                 <div class="flex flex-col items-center justify-center py-10">
@@ -606,17 +581,14 @@
                     <span class="ml-4 text-gray-400 text-lg mt-4">${message}</span>
                 </div>
             `;
-            // Ensure the modal body is set up for center alignment
-            modalBodyElement.classList.remove('flex-row'); // Just in case
+            modalBodyElement.classList.remove('flex-row');
             modalBodyElement.classList.add('flex-col', 'items-center', 'justify-center');
         }
 
         function hideModalLoading(modalBodyElement) {
-            // Revert modal body flex properties if content dictates
             modalBodyElement.classList.remove('flex-col', 'items-center', 'justify-center');
         }
 
-        // --- Logs Modal Functions ---
         async function viewLogs(containerId, containerName) {
             DOMElements.logsModalTitle.textContent = `Logs for ${containerName}`;
             showModalLoading(DOMElements.logsModalBody, 'Loading container logs...');
@@ -625,7 +597,6 @@
             try {
                 const response = await fetch(`/container/${containerId}/logs`);
                 const data = await response.json();
-
                 if (response.ok) {
                     DOMElements.logsModalBody.innerHTML = `<pre class="log-content">${data.logs || 'No logs available.'}</pre>`;
                 } else {
@@ -638,13 +609,13 @@
                 showMessageBox(`An unexpected error occurred while fetching logs: ${error.message}`, 'error');
             } finally {
                 hideModalLoading(DOMElements.logsModalBody);
-                DOMElements.logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center'); // Ensure flex is removed
+                DOMElements.logsModalBody.classList.remove('flex-col', 'items-center', 'justify-center');
             }
         }
 
         function closeLogsModal() {
             DOMElements.logsModal.classList.add('hidden');
-            DOMElements.logsModalBody.innerHTML = ''; // Clear content
+            DOMElements.logsModalBody.innerHTML = '';
         }
 
         function copyLogsToClipboard() {
@@ -656,7 +627,6 @@
             }
         }
 
-        // --- Metrics Modal Functions ---
         async function viewMetrics(containerId, containerName) {
             DOMElements.metricsModalTitle.textContent = `Metrics for ${containerName}`;
             showModalLoading(DOMElements.metricsModalBody, 'Loading container metrics...');
@@ -678,7 +648,6 @@
                     throw new Error(metricsData.error || 'Failed to load container metrics.');
                 }
 
-                // Render Details
                 let detailsHtml = `
                     <h3 class="text-2xl font-bold text-gray-900 mb-4 px-6 pt-6">Basic Info</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700 p-6 pt-0 bg-white rounded-xl shadow-md mb-6">
@@ -693,7 +662,6 @@
                     </div>
                 `;
 
-                // Render Metrics if available
                 if (metricsData && !metricsData.error) {
                     detailsHtml += `
                         <h3 class="text-2xl font-bold text-gray-900 mb-4 px-6">Current Metrics</h3>
@@ -725,8 +693,6 @@
                 }
 
                 DOMElements.metricsModalBody.innerHTML = `<div class="bg-white rounded-2xl overflow-y-auto max-h-[70vh] custom-scrollbar">${detailsHtml}</div>`;
-
-
             } catch (error) {
                 console.error('Error fetching details or metrics:', error);
                 DOMElements.metricsModalBody.innerHTML = `<p class="text-red-500 p-4">Error loading details/metrics: ${error.message}</p>`;
@@ -737,10 +703,9 @@
             }
         }
 
-
         function closeMetricsModal() {
             DOMElements.metricsModal.classList.add('hidden');
-            DOMElements.metricsModalBody.innerHTML = ''; // Clear content
+            DOMElements.metricsModalBody.innerHTML = '';
         }
     </script>
 </body>

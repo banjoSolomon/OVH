@@ -1,31 +1,35 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session
 import docker
 from docker.errors import NotFound, APIError
 from datetime import datetime
 import humanize
+from functools import wraps
 
-app = Flask(__name__)  # Corrected from __noise__ to __name__
-app.secret_key = 'your_secret_key_here' # Replace with a strong, random secret key!
+app = Flask(__name__)
+app.secret_key = 'your_very_secure_random_secret_key_here'  # Replace with a strong, random secret key!
 
 # Initialize Docker client globally
 try:
     client = docker.from_env()
-    # Test connection to ensure Docker daemon is reachable
     client.ping()
     DOCKER_CLIENT_READY = True
     print("Successfully connected to Docker daemon.")
 except Exception as e:
     print(f"Error connecting to Docker daemon: {e}")
     DOCKER_CLIENT_READY = False
-    client = None  # Ensure client is None if connection fails
+    client = None
 
+# Hardcoded admin credentials (for demo purposes; use a database with hashed passwords in production)
+ADMIN_CREDENTIALS = {
+    'username': 'admin',
+    'password': 'semicolon-delivery'
+}
 
 def format_size(size_bytes):
     """Formats bytes into human-readable string (e.g., 10MB, 2.5GB)."""
     if size_bytes is None:
         return "N/A"
     return humanize.naturalsize(size_bytes)
-
 
 def get_container_details(container):
     """Extracts comprehensive details for a given container object for the table view."""
@@ -34,15 +38,13 @@ def get_container_details(container):
         'short_id': container.short_id,
         'name': container.name,
         'image_tag': container.image.tags[0] if container.image.tags else 'untagged',
-        'status': container.status,  # Directly use container.status for flexibility
+        'status': container.status,
         'command': ' '.join(container.attrs['Config']['Cmd']) if container.attrs['Config']['Cmd'] else 'N/A',
-        # Join command list to string
         'ports': 'N/A',
-        'created_at': 'N/A', # This will now store the ISO string or 'N/A'
+        'created_at': 'N/A',
         'size': 'N/A'
     }
 
-    # Extract ports
     if container.ports:
         port_mappings = []
         for private_port, public_bindings in container.ports.items():
@@ -57,14 +59,11 @@ def get_container_details(container):
     else:
         details['ports'] = 'No ports'
 
-    # Extract created time (ISO format for client-side processing)
     if container.attrs and 'Created' in container.attrs:
         details['created_at'] = container.attrs['Created']
     else:
-        details['created_at'] = 'N/A' # Or an empty string if you prefer
+        details['created_at'] = 'N/A'
 
-    # Size: Note that 'SizeRw' and 'SizeRootFs' are often only populated when
-    # containers.list(size=True) or container.inspect() is called.
     if 'SizeRw' in container.attrs and 'SizeRootFs' in container.attrs:
         total_size = container.attrs['SizeRw'] + container.attrs['SizeRootFs']
         details['size'] = format_size(total_size)
@@ -75,7 +74,6 @@ def get_container_details(container):
 
     return details
 
-
 def get_container_stats_summary():
     """Gets counts of running, exited, and total containers for dashboard cards."""
     if not DOCKER_CLIENT_READY:
@@ -83,11 +81,9 @@ def get_container_stats_summary():
 
     try:
         all_containers = client.containers.list(all=True)
-
         running_count = len([c for c in all_containers if c.status == 'running'])
         exited_count = len([c for c in all_containers if c.status == 'exited'])
         total_count = len(all_containers)
-
         print(f"Dashboard Stats: Running={running_count}, Exited={exited_count}, Total={total_count}")
         return running_count, exited_count, total_count
     except APIError as e:
@@ -99,14 +95,45 @@ def get_container_stats_summary():
         flash(f"An unexpected error occurred while fetching dashboard statistics: {e}", "error")
         return 0, 0, 0
 
-
 def flash_message_and_redirect(message, category):
     """Helper function to flash a message and redirect to the index."""
     flash(message, category)
     return redirect(url_for('index'))
 
+def login_required(f):
+    """Decorator to ensure user is logged in."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session or not session['logged_in']:
+            flash("Please log in to access the dashboard.", "error")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if username == ADMIN_CREDENTIALS['username'] and password == ADMIN_CREDENTIALS['password']:
+            session['logged_in'] = True
+            flash("Successfully logged in!", "success")
+            return redirect(url_for('index'))
+        else:
+            flash("Invalid username or password.", "error")
+            return render_template("login.html")
+
+    return render_template("login.html")
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    session.pop('logged_in', None)
+    flash("Successfully logged out.", "success")
+    return redirect(url_for('login'))
 
 @app.route("/", methods=["GET"])
+@login_required
 def index():
     if not DOCKER_CLIENT_READY:
         flash("Could not connect to Docker daemon. Please ensure Docker is running and accessible.", "error")
@@ -155,8 +182,8 @@ def index():
         total_count=total_count
     )
 
-
 @app.route("/container/<container_id>/start", methods=["POST"])
+@login_required
 def start_container(container_id):
     if not DOCKER_CLIENT_READY:
         return flash_message_and_redirect("Docker client not ready. Cannot start container.", "error")
@@ -171,14 +198,14 @@ def start_container(container_id):
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
-
 @app.route("/container/<container_id>/stop", methods=["POST"])
+@login_required
 def stop_container(container_id):
     if not DOCKER_CLIENT_READY:
         return flash_message_and_redirect("Docker client not ready. Cannot stop container.", "error")
     try:
         container = client.containers.get(container_id)
-        container.stop(timeout=5)  # Add a timeout for graceful shutdown
+        container.stop(timeout=5)
         return flash_message_and_redirect(f"Container '{container.name}' stopped successfully.", "success")
     except NotFound:
         return flash_message_and_redirect(f"Container with ID '{container_id}' not found.", "error")
@@ -187,14 +214,14 @@ def stop_container(container_id):
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
-
 @app.route("/container/<container_id>/restart", methods=["POST"])
+@login_required
 def restart_container(container_id):
     if not DOCKER_CLIENT_READY:
         return flash_message_and_redirect("Docker client not ready. Cannot restart container.", "error")
     try:
         container = client.containers.get(container_id)
-        container.restart(timeout=10)  # Add a timeout for restart
+        container.restart(timeout=10)
         return flash_message_and_redirect(f"Container '{container.name}' restarted successfully.", "success")
     except NotFound:
         return flash_message_and_redirect(f"Container with ID '{container_id}' not found.", "error")
@@ -203,8 +230,8 @@ def restart_container(container_id):
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
-
 @app.route("/container/<container_id>/remove", methods=["POST"])
+@login_required
 def remove_container(container_id):
     if not DOCKER_CLIENT_READY:
         return flash_message_and_redirect("Docker client not ready. Cannot remove container.", "error")
@@ -224,8 +251,8 @@ def remove_container(container_id):
     except Exception as e:
         return flash_message_and_redirect(f"An unexpected error occurred: {e}", "error")
 
-
 @app.route("/container/<container_id>/logs", methods=["GET"])
+@login_required
 def get_container_logs(container_id):
     print(f"Received request for logs for container ID: {container_id}")
     if not DOCKER_CLIENT_READY:
@@ -247,16 +274,15 @@ def get_container_logs(container_id):
         print(f"An unexpected error occurred while fetching logs for '{container_id}': {e}. Returning 500.")
         return jsonify({"logs": f"An unexpected error occurred while fetching logs: {e}"}), 500
 
-
-# NEW ROUTE: For full container details (attrs) - static configuration and metadata
 @app.route("/container/<string:container_id>/details", methods=["GET"])
+@login_required
 def get_container_full_details(container_id):
     print(f"Received request for full details for container ID: {container_id}")
     if not DOCKER_CLIENT_READY:
         return jsonify({"error": "Docker client not ready."}), 500
     try:
         container = client.containers.get(container_id)
-        details = container.attrs # This contains all the low-level details
+        details = container.attrs
         print(f"Successfully fetched full details for '{container.name}'.")
         return jsonify(details)
     except NotFound:
@@ -269,8 +295,8 @@ def get_container_full_details(container_id):
         print(f"An unexpected error occurred while fetching full details for '{container_id}': {e}. Returning 500.")
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/container/<container_id>/metrics", methods=["GET"])
+@login_required
 def get_container_metrics(container_id):
     print(f"Received request for metrics for container ID: {container_id}")
     if not DOCKER_CLIENT_READY:
@@ -280,18 +306,16 @@ def get_container_metrics(container_id):
         container = client.containers.get(container_id)
         print(f"Found container '{container.name}' ({container.id}). Attempting to fetch stats...")
 
-        stats_data = container.stats(stream=False)  # stream=False gets current stats immediately
+        stats_data = container.stats(stream=False)
 
         if not stats_data:
-            print(
-                f"No stats data available for container '{container.name}' ({container_id}). It might be too new or not generating stats yet.")
+            print(f"No stats data available for container '{container.name}' ({container_id}).")
             return jsonify({
                 "error": f"No metrics data available for container '{container.name}'."
             }), 500
 
         print(f"Successfully received raw stats data for '{container.name}'.")
 
-        # Initialize default values
         cpu_percentage_value = 0.0
         memory_usage_mb = 0.0
         memory_limit_mb = 0.0
@@ -302,19 +326,15 @@ def get_container_metrics(container_id):
         block_io_write_mb = 0.0
 
         try:
-            # CPU usage calculation based on Docker's formula:
             cpu_stats = stats_data.get('cpu_stats', {})
             precpu_stats = stats_data.get('precpu_stats', {})
-
             if cpu_stats and precpu_stats:
                 cpu_delta = cpu_stats.get('cpu_usage', {}).get('total_usage', 0) - \
                             precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
                 system_cpu_delta = cpu_stats.get('system_cpu_usage', 0) - \
                                    precpu_stats.get('system_cpu_usage', 0)
-
                 online_cpus = cpu_stats.get('online_cpus',
                                             len(cpu_stats.get('cpu_usage', {}).get('percpu_usage', [])) or 1)
-
                 if system_cpu_delta > 0 and cpu_delta > 0 and online_cpus > 0:
                     cpu_percent = (cpu_delta / system_cpu_delta) * online_cpus * 100.0
                     cpu_percentage_value = round(cpu_percent, 2)
@@ -327,10 +347,8 @@ def get_container_metrics(container_id):
             if 'usage' in memory_stats and 'limit' in memory_stats:
                 mem_usage_bytes = memory_stats['usage']
                 mem_limit_bytes = memory_stats['limit']
-
                 memory_usage_mb = round(mem_usage_bytes / (1024 * 1024), 2)
                 memory_limit_mb = round(mem_limit_bytes / (1024 * 1024), 2)
-
                 if mem_limit_bytes > 0:
                     memory_percentage_value = round((mem_usage_bytes / mem_limit_bytes) * 100, 2)
             print(f"Memory metrics processed for '{container.name}'.")
@@ -387,7 +405,6 @@ def get_container_metrics(container_id):
     except Exception as e:
         print(f"An unexpected error occurred while fetching metrics for '{container_id}': {e}. Returning 500.")
         return jsonify({"error": f"An unexpected error occurred while fetching metrics: {e}"}), 500
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
